@@ -1,0 +1,110 @@
+# configs/features.yaml
+# GridLock R2 — PS1: Parking-Induced Congestion
+# Feature list for XGBoost/LightGBM model
+# ─────────────────────────────────────────────────────────────────
+# RULE: Never hardcode these names in Python.
+#       Always read from this file via: yaml.safe_load(open("configs/features.yaml"))
+# RULE: Changing a feature only requires editing this file + retraining.
+# RULE: Log the features.yaml hash in every training run.
+# ─────────────────────────────────────────────────────────────────
+
+# ── Temporal Features ─────────────────────────────────────────────
+# Extracted from created_datetime (UTC → IST for display, UTC for computation)
+temporal:
+  - hour_of_day          # int [0, 23]  — violations spike at 9-10am, 5-7pm
+  - day_of_week          # int [0, 6]   — 0=Monday, 6=Sunday (was missing from model — FIXED)
+  - is_weekend           # int [0, 1]   — Saturday + Sunday = 1
+  - month                # int [1, 12]  — captures seasonal enforcement patterns
+
+# ── Historical / Rolling Features ───────────────────────────────────
+# Computed during Phase B (aggregate_to_zone_grid) using shift(1).rolling(7).mean()
+# Leakage-free: current day's count is shifted out before rolling.
+historical:
+  - rolling_7d_count     # float — 7-day trailing mean of violation count per (zone_id, hour_of_day)
+                         # Grouped by (zone_id, hour_of_day) for hour resolution,
+                         # or by zone_id for day resolution.
+                         # shift(1) ensures today's count never leaks in.
+                         # Expected to be top SHAP feature after training.
+
+# ── Spatial Features ──────────────────────────────────────────────
+# Use zone_id (DBSCAN cluster label) NOT raw lat/lon as ML feature.
+# Raw lat/lon only used for DBSCAN clustering step, then discarded as a direct feature.
+# Using raw lat/lon would memorize training zone coordinates → spatial leakage.
+spatial:
+  - zone_id              # int — DBSCAN cluster label (-1 = noise/sparse zone)
+  - is_at_junction       # int [0, 1] — DERIVED in features.py as:
+                         # (junction_name != 'No Junction').astype(int)
+                         # junction_name is the RAW column (169 unique values incl. 'No Junction' = 49.5%)
+
+# ── Categorical Features (label-encoded) ─────────────────────────
+# All encoded with sklearn LabelEncoder. Mappings saved alongside model checkpoint.
+categorical:
+  - violation_type_primary_encoded  # Primary atomic type after ast.literal_eval + explode
+  - vehicle_type_encoded            # 22 unique vehicle types
+  - police_station_id               # 54 unique stations — strong spatial proxy
+  - center_code_encoded             # Categorical zone ID (2–88). Imputed with mode per station.
+
+# ── Optional / Under Evaluation ───────────────────────────────────
+# Include in first training run. Check SHAP feature importance.
+# Drop and retrain if importance rank < bottom 20% of all features.
+optional:
+  - data_sent_to_scita   # bool [0, 1] — whether challan forwarded to SCITA system.
+                         # TRADEOFF: 0% null, cheap signal. BUT may reflect admin
+                         # batching behaviour rather than violation pattern.
+                         # Decision: include → check importance → drop if near-zero.
+
+# ── Target Variable ───────────────────────────────────────────────
+# Engineered column — does NOT exist in raw data.
+# Created in src/data/features.py during zone × time-block aggregation.
+target:
+  col: zone_hour_violation_count      # int — violation count per zone per hour
+  aggregation: count                  # COUNT of rows per (zone_id, hour_bucket)
+  time_resolution: minute             # Aggregate by minute first to dedup; then roll to hour
+  dedup_rule: >
+    Deduplicate ONLY when ALL of these are identical:
+    (latitude, longitude, violation_type, vehicle_type, created_datetime rounded to minute).
+    Same-second events at different lat/lon = real multi-violation events — KEEP.
+
+# ── Excluded Columns (documented here for traceability) ───────────
+excluded:
+  - description            # 100% null
+  - closed_datetime        # 100% null
+  - action_taken_timestamp # 100% null
+  - data_sent_to_scita_timestamp  # 86% null + test-window only = pure temporal leakage
+  - modified_datetime      # Post-event: filled AFTER violation recorded — not at prediction time
+  - validation_status      # Post-event admin field + 42% null
+  - validation_timestamp   # Post-event + 42% null + 8 missing days near split boundary
+  - updated_vehicle_number # 42% null
+  - updated_vehicle_type   # 42% null
+  - id                     # Identifier — unique per row, no generalizable signal
+  - vehicle_number         # 143k+ unique plates — would cause memorization not learning
+  - location               # Free-text address — 1% null, geographic info covered by lat/lon
+
+# ── Encoding Registry ─────────────────────────────────────────────
+# LabelEncoder mappings must be saved alongside model checkpoint.
+# Path: checkpoints/<run_id>/label_encoders.pkl
+# Never apply a new encoder at inference — always load saved encoders.
+encodings:
+  violation_type_primary_encoded:
+    source_col: violation_type
+    parse: ast.literal_eval   # Parse JSON list, take index[0] as primary type
+    encoder: LabelEncoder
+  vehicle_type_encoded:
+    source_col: vehicle_type
+    encoder: LabelEncoder
+  police_station_id:
+    source_col: police_station
+    encoder: LabelEncoder
+  center_code_encoded:
+    source_col: center_code
+    impute: mode_per_police_station   # Fill 3.77% nulls before encoding
+    encoder: LabelEncoder
+
+# ── Version / Metadata ────────────────────────────────────────────
+version: "1.0"
+last_updated: "2026-06-16"
+updated_by: "Claude Sonnet 4.6 Thinking"
+basis: "EDA audit 2026-06-16 — eda_summary.json"
+note: >
+  This is features v1. Do not change feature names without:
+  (1) updating this file, (2) appending to session_log.md, (3) retraining from scratch.

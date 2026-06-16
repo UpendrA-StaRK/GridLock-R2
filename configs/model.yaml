@@ -1,0 +1,189 @@
+# configs/model.yaml
+# GridLock R2 — PS1: Parking-Induced Congestion
+# Model hyperparameters and comparison configuration
+# ─────────────────────────────────────────────────────────────────
+# RULE: All hyperparameters read from here — never hardcoded in Python.
+# RULE: Every training run saves a copy of this file alongside the checkpoint.
+# RULE: Model selection is done by NDCG@10 on the test set — not by speed or demo convenience.
+# RULE: If any model not listed here shows potential, add it here before running.
+# ─────────────────────────────────────────────────────────────────
+
+# ── Random Seed ───────────────────────────────────────────────────
+seed: 42
+deterministic: true   # Set all random seeds before any training
+
+# ── DBSCAN Clustering Params ───────────────────────────────────────
+# Committed from notebooks/02_cluster_tuning.ipynb grid search (2026-06-16).
+# DO NOT change without re-running 02_cluster_tuning.ipynb first.
+# Changing eps shifts all zone_ids — requires full retrain from scratch.
+dbscan:
+  eps: 0.05                 # In StandardScaler-normalised coordinate units
+  min_samples: 50           # Min points to form a dense cluster
+  committed_on: "2026-06-16"
+  tuning_notebook: "notebooks/02_cluster_tuning.ipynb"
+  tuning_results:
+    n_clusters: 90          # On 50k-row sample; full dataset may differ slightly
+    noise_pct: 11.3         # % rows labelled -1 (sparse zone)
+    silhouette_score: 0.3415
+    sample_size: 50000
+  notes: >
+    90 clusters across Bengaluru at 0.05 eps (scaled).
+    11.3% noise → sparse zones, handled per eval.yaml noise_zones policy.
+    Silhouette 0.3415 = decent separation, above the 0.30 minimum threshold.
+
+
+# ── Time-Block Granularity ────────────────────────────────────────
+# Decision: run BOTH and pick whichever gives better NDCG@10 on test set.
+# Do NOT pick based on demo convenience — pick on accuracy.
+#
+# per_hour analysis:
+#   - ~215k training rows (zone × hour × day)
+#   - Captures intra-day rush-hour patterns
+#   - Sparse: many zone-hour combos will have 0 violations (zero-inflation risk)
+#   - Better temporal resolution for enforcement scheduling
+#
+# per_day analysis:
+#   - ~8,960 training rows (zone × day)
+#   - Denser signal (avg ~25 violations/zone/day vs ~1.4/zone/hour)
+#   - Loses intra-day pattern — all hours treated equally
+#   - Less sparsity, potentially more stable regression
+#
+# Evaluation: train both, compare NDCG@10. Winning granularity becomes primary.
+time_resolution:
+  candidates: [hour, day]
+  primary: hour          # Start here — more signal
+  fallback: day          # If per-hour NDCG@10 is poor due to sparsity
+  selection_metric: NDCG@10
+  zero_handling: include   # Include zero-violation zone-hour rows as training signal
+
+# ── Model Comparison Plan ─────────────────────────────────────────
+# The 3-model comparison runs EXACTLY ONCE during the training phase.
+# After the winner is picked, set primary_model below and never rerun all three.
+# All subsequent steps (tuning, inference, dashboard) use primary_model only.
+model_comparison:
+  selection_metric: NDCG@10
+  secondary_metric: Precision@10
+  tiebreaker: MAE          # If NDCG@10 tied, lower MAE wins
+  run_all: true            # Train all candidates — this flag is set false after winner is chosen
+  save_all: true           # Save checkpoints for all — never delete
+
+# ── Winner (filled in after model comparison completes) ───────────
+# Set this after the one-time comparison run. Everything after uses this only.
+# Rerun all three ONLY if: features change significantly, DBSCAN zones rebuild,
+# or a new candidate model is added to this file.
+primary_model: "xgboost"        # e.g. "lightgbm" — set after comparison
+primary_time_resolution: "hour"  # e.g. "hour" or "day" — set after comparison
+winner_ndcg_at_10: 1.000000    # e.g. 0.74 — record the winning score
+comparison_run_date: "2026-06-16"  # e.g. "2026-06-17" — set after comparison
+
+when_to_retrain_all:
+  - "features.yaml changes (feature added/dropped)"
+  - "DBSCAN eps changes and zone_ids shift"
+  - "New candidate model added to this file"
+  - "Never otherwise — primary_model only after this"
+
+# ── Candidate Models ──────────────────────────────────────────────
+
+xgboost:
+  enabled: true
+  class: XGBRegressor
+  objective: reg:squarederror
+  eval_metric: rmse
+  n_estimators: 300
+  learning_rate: 0.05
+  max_depth: 6
+  min_child_weight: 5      # Regularise sparse zones (key for zone-hour sparsity)
+  subsample: 0.8
+  colsample_bytree: 0.8
+  reg_alpha: 0.1           # L1 regularisation
+  reg_lambda: 1.0          # L2 regularisation
+  n_jobs: -1               # Use all CPU cores
+  seed: 42
+  early_stopping_rounds: 20
+  notes: >
+    Primary candidate. Well-calibrated for count data. ~60-90s on i7-12700H.
+    Strong interpretability via SHAP — important for judge Q&A.
+
+lightgbm:
+  enabled: true
+  class: LGBMRegressor
+  objective: regression
+  metric: rmse
+  n_estimators: 300
+  learning_rate: 0.05
+  num_leaves: 63           # Equivalent to max_depth=6 in XGBoost
+  min_child_samples: 10    # Equivalent to min_child_weight
+  subsample: 0.8
+  colsample_bytree: 0.8
+  reg_alpha: 0.1
+  reg_lambda: 1.0
+  n_jobs: -1
+  seed: 42
+  early_stopping_rounds: 20
+  notes: >
+    3-5x faster than XGBoost on this dataset. Comparable accuracy.
+    Better default handling of high-cardinality categoricals.
+    ~15-30s on i7-12700H.
+
+catboost:
+  enabled: true
+  class: CatBoostRegressor
+  loss_function: RMSE
+  iterations: 300
+  learning_rate: 0.05
+  depth: 6
+  l2_leaf_reg: 3.0
+  min_data_in_leaf: 5
+  random_seed: 42
+  early_stopping_rounds: 20
+  verbose: 0
+  notes: >
+    Best native categorical feature handling — relevant because violation_type,
+    vehicle_type, police_station are encoded categoricals. If LabelEncoder
+    causes issues for XGB/LGB, CatBoost handles raw categoricals natively.
+    Slower than LightGBM but often better on high-cardinality categoricals.
+    ~2-4 min on i7-12700H.
+
+# ── Additional Candidates (run if above three are insufficient) ────
+# Add any new model here before training — never add mid-experiment.
+additional_candidates:
+  - name: sklearn_gradient_boosting
+    enabled: false
+    reason_disabled: "Slower than XGBoost/LGB with no accuracy advantage at this scale"
+  - name: random_forest
+    enabled: false
+    reason_disabled: "No advantage over gradient boosting for tabular count data"
+  - name: mlp_neural_network
+    enabled: false
+    reason_disabled: "Overkill for tabular data; harder to explain to judges; needs tuning"
+  - name: tabnet
+    enabled: false
+    reason_disabled: "Interesting for tabular deep learning but adds heavy dependency"
+  - name: linear_regression
+    enabled: true
+    use_as: sanity_check    # Run as a floor — model must beat this
+    notes: "Ridge regression. Expected to underperform — confirms tree models add value."
+
+# ── Checkpoint Policy ─────────────────────────────────────────────
+checkpointing:
+  save_dir: checkpoints/
+  filename_pattern: "{model}_{time_resolution}_{timestamp}/"
+  save_best: true           # best_checkpoint — highest NDCG@10 on validation
+  save_latest: true         # latest_checkpoint — for resuming
+  save_contents:
+    - model_weights
+    - label_encoders        # Saved as label_encoders.pkl
+    - features_yaml_hash    # Hash of configs/features.yaml at training time
+    - model_yaml_copy       # Full copy of this file
+    - eval_yaml_copy        # Full copy of configs/eval.yaml
+    - training_metrics      # Per-epoch MAE, RMSE
+    - seed                  # For reproducibility
+
+# ── Version / Metadata ────────────────────────────────────────────
+version: "1.0"
+last_updated: "2026-06-16"
+updated_by: "Claude Sonnet 4.6 Thinking"
+basis: "EDA audit + user decisions 2026-06-16"
+note: >
+  Model winner selected by NDCG@10 on test set only.
+  Speed and demo convenience are NOT selection criteria.

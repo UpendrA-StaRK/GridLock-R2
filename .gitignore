@@ -1,0 +1,22 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Virtual Environment
+venv/
+
+# CatBoost output files
+catboost_info/
+
+# Project Data (raw, processed, and generated outputs)
+data/raw/
+data/processed/
+data/outputs/
+
+# Trained ML Model Checkpoints
+checkpoints/
