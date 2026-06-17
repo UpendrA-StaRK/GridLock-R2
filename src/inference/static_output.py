@@ -154,7 +154,10 @@ def build_folium_map(
             ),
         ).add_to(m)
 
-    map_html = m._repr_html_()
+    import base64
+    html_bytes = m.get_root().render().encode("utf-8")
+    b64 = base64.b64encode(html_bytes).decode("utf-8")
+    map_html = f'<iframe src="data:text/html;base64,{b64}" style="width:100%; height:100%; border:none;"></iframe>'
     return map_html
 
 
@@ -403,7 +406,8 @@ def generate_static_output(
       header {{ flex-direction: column; align-items: flex-start; gap: 12px; padding: 16px; }}
       .meta-bar {{ flex-direction: column; gap: 8px; padding: 12px 16px; }}
       .scorecard-grid {{ grid-template-columns: 1fr; }}
-      .map-card .card-body {{ height: 350px; }}
+      .map-card .card-body {{ height: 350px; padding: 0; margin-bottom: -5px; }}
+      .map-card iframe {{ display: block; }}
       .table-wrapper {{ overflow-x: auto; display: block; width: 100%; -webkit-overflow-scrolling: touch; }}
     }}
   </style>
