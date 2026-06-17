@@ -180,22 +180,24 @@ def _build_table_html(top_k_df: pd.DataFrame) -> str:
         </tr>"""
 
     table_html = f"""
-    <table style='border-collapse:collapse; width:100%; font-family:Arial; font-size:14px'>
-      <thead>
-        <tr style='background:#2c3e50; color:white'>
-          <th style='padding:8px'>Rank</th>
-          <th style='padding:8px'>Zone ID</th>
-          <th style='padding:8px'>Priority</th>
-          <th style='padding:8px'>Priority Score</th>
-          <th style='padding:8px'>Predicted Count</th>
-          <th style='padding:8px'>CIS Score</th>
-          <th style='padding:8px'>Junction</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows_html}
-      </tbody>
-    </table>"""
+    <div class="table-wrapper">
+      <table style='border-collapse:collapse; width:100%; font-family:Arial; font-size:14px'>
+        <thead>
+          <tr style='background:#2c3e50; color:white'>
+            <th style='padding:8px'>Rank</th>
+            <th style='padding:8px'>Zone ID</th>
+            <th style='padding:8px'>Priority</th>
+            <th style='padding:8px'>Priority Score</th>
+            <th style='padding:8px'>Predicted Count</th>
+            <th style='padding:8px'>CIS Score</th>
+            <th style='padding:8px'>Junction</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows_html}
+        </tbody>
+      </table>
+    </div>"""
 
     return table_html
 
@@ -392,9 +394,17 @@ def generate_static_output(
       border-top: 1px solid #ddd; background: white;
     }}
     @media (max-width: 900px) {{
-      .container {{ grid-template-columns: 1fr; }}
+      .container {{ grid-template-columns: 1fr; padding: 16px; gap: 16px; }}
       .map-card {{ grid-column: 1; }}
       .scorecard-grid {{ grid-template-columns: repeat(2, 1fr); }}
+      .card {{ grid-column: 1 !important; }}
+    }}
+    @media (max-width: 600px) {{
+      header {{ flex-direction: column; align-items: flex-start; gap: 12px; padding: 16px; }}
+      .meta-bar {{ flex-direction: column; gap: 8px; padding: 12px 16px; }}
+      .scorecard-grid {{ grid-template-columns: 1fr; }}
+      .map-card .card-body {{ height: 350px; }}
+      .table-wrapper {{ overflow-x: auto; display: block; width: 100%; -webkit-overflow-scrolling: touch; }}
     }}
   </style>
 </head>
