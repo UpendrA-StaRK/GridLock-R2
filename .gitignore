@@ -20,3 +20,6 @@ data/outputs/
 
 # Trained ML Model Checkpoints
 checkpoints/
+
+!docs/
+!docs/**

@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GridLock R2 — Enforcement Priority | 2024-03-18</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; color: #2c3e50; }
+    header {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      color: white; padding: 24px 32px; display: flex; justify-content: space-between; align-items: center;
+    }
+    header h1 { font-size: 22px; font-weight: 700; letter-spacing: 0.5px; }
+    header p { font-size: 13px; color: #a0b4c8; margin-top: 4px; }
+    .badge {
+      background: #e74c3c; color: white; padding: 4px 12px;
+      border-radius: 20px; font-size: 12px; font-weight: bold;
+    }
+    .meta-bar {
+      background: white; border-bottom: 1px solid #ddd;
+      padding: 12px 32px; display: flex; gap: 32px; font-size: 13px; color: #555;
+    }
+    .meta-bar span { font-weight: 600; color: #2c3e50; }
+    .container { padding: 24px 32px; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .card {
+      background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      overflow: hidden;
+    }
+    .card-header {
+      background: #2c3e50; color: white; padding: 12px 16px;
+      font-size: 14px; font-weight: 600; letter-spacing: 0.3px;
+    }
+    .card-body { padding: 16px; overflow: auto; }
+    .map-card { grid-column: 1 / 3; }
+    .map-card .card-body { padding: 0; height: 520px; }
+    .map-card iframe { width: 100%; height: 100%; border: none; }
+    .formula-box {
+      background: #f8f9fa; border-left: 4px solid #3498db;
+      padding: 10px 14px; margin-top: 12px; font-size: 13px; border-radius: 0 4px 4px 0;
+    }
+    .scorecard-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding: 4px 0;
+    }
+    .score-block {
+      background: #f8f9fa; border-radius: 8px; padding: 14px 16px;
+      border: 1px solid #e8ecef;
+    }
+    .score-label { font-size: 11px; font-weight: 600; color: #7f8c8d; text-transform: uppercase; letter-spacing: 0.5px; }
+    .score-value { font-size: 28px; font-weight: 700; color: #2c3e50; margin: 6px 0 2px; }
+    .score-sub { font-size: 11px; color: #95a5a6; margin-top: 4px; }
+    footer {
+      text-align: center; padding: 16px; font-size: 12px; color: #999;
+      border-top: 1px solid #ddd; background: white;
+    }
+    @media (max-width: 900px) {
+      .container { grid-template-columns: 1fr; }
+      .map-card { grid-column: 1; }
+      .scorecard-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🚨 GridLock R2 — Enforcement Priority Map</h1>
+    <p>PS1: Parking-Induced Congestion | Bengaluru Traffic Police</p>
+  </div>
+  <div>
+    <div class="badge">DEMO OUTPUT</div>
+    <p style="font-size:12px;color:#a0b4c8;margin-top:6px">2026-06-16 16:22 UTC</p>
+  </div>
+</header>
+
+<div class="meta-bar">
+  <div>Date: <span>2024-03-18</span></div>
+  <div>Time slot: <span>09:00–10:00</span></div>
+  <div>Model: <span>XGBOOST (hour)</span></div>
+  <div>Zones ranked: <span>10</span></div>
+  <div>Formula: <span>priority = predicted_count × CIS</span></div>
+</div>
+
+<div class="container">
+
+  <div class="card map-card">
+    <div class="card-header">📍 Interactive Enforcement Map — Bengaluru</div>
+    <div class="card-body">
+      <div style="width:100%;"><div style="position:relative;width:100%;height:0;padding-bottom:60%;"><span style="color:#565656">Make this Notebook Trusted to load map: File -> Trust Notebook</span><iframe srcdoc="&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+    
+    &lt;meta http-equiv=&quot;content-type&quot; content=&quot;text/html; charset=UTF-8&quot; /&gt;
+    &lt;script src=&quot;https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js&quot;&gt;&lt;/script&gt;
+    &lt;script src=&quot;https://code.jquery.com/jquery-3.7.1.min.js&quot;&gt;&lt;/script&gt;
+    &lt;script src=&quot;https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js&quot;&gt;&lt;/script&gt;
+    &lt;script src=&quot;https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js&quot;&gt;&lt;/script&gt;
+    &lt;link rel=&quot;stylesheet&quot; href=&quot;https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css&quot;/&gt;
+    &lt;link rel=&quot;stylesheet&quot; href=&quot;https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css&quot;/&gt;
+    &lt;link rel=&quot;stylesheet&quot; href=&quot;https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css&quot;/&gt;
+    &lt;link rel=&quot;stylesheet&quot; href=&quot;https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css&quot;/&gt;
+    &lt;link rel=&quot;stylesheet&quot; href=&quot;https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css&quot;/&gt;
+    &lt;link rel=&quot;stylesheet&quot; href=&quot;https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css&quot;/&gt;
+    
+            &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,
+                initial-scale=1.0, maximum-scale=1.0, user-scalable=no&quot; /&gt;
+            &lt;style&gt;
+                #map_b1db7fae55d3cd5dd7a022bf4f5769e8 {
+                    position: relative;
+                    width: 100.0%;
+                    height: 100.0%;
+                    left: 0.0%;
+                    top: 0.0%;
+                }
+                .leaflet-container { font-size: 1rem; }
+            &lt;/style&gt;
+
+            &lt;style&gt;html, body {
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            &lt;/style&gt;
+
+            &lt;style&gt;#map {
+                position:absolute;
+                top:0;
+                bottom:0;
+                right:0;
+                left:0;
+                }
+            &lt;/style&gt;
+
+            &lt;script&gt;
+                L_NO_TOUCH = false;
+                L_DISABLE_3D = false;
+            &lt;/script&gt;
+
+        
+&lt;/head&gt;
+&lt;body&gt;
+    
+    
+            &lt;div class=&quot;folium-map&quot; id=&quot;map_b1db7fae55d3cd5dd7a022bf4f5769e8&quot; &gt;&lt;/div&gt;
+        
+&lt;/body&gt;
+&lt;script&gt;
+    
+    
+            var map_b1db7fae55d3cd5dd7a022bf4f5769e8 = L.map(
+                &quot;map_b1db7fae55d3cd5dd7a022bf4f5769e8&quot;,
+                {
+                    center: [12.9716, 77.5946],
+                    crs: L.CRS.EPSG3857,
+                    ...{
+  &quot;zoom&quot;: 12,
+  &quot;zoomControl&quot;: true,
+  &quot;preferCanvas&quot;: false,
+}
+
+                }
+            );
+
+            
+
+        
+    
+            var tile_layer_d52e66c400220e86fb630e59c3c68601 = L.tileLayer(
+                &quot;https://tile.openstreetmap.org/{z}/{x}/{y}.png&quot;,
+                {
+  &quot;minZoom&quot;: 0,
+  &quot;maxZoom&quot;: 19,
+  &quot;maxNativeZoom&quot;: 19,
+  &quot;noWrap&quot;: false,
+  &quot;attribution&quot;: &quot;\u0026copy; \u003ca href=\&quot;https://www.openstreetmap.org/copyright\&quot;\u003eOpenStreetMap\u003c/a\u003e contributors&quot;,
+  &quot;subdomains&quot;: &quot;abc&quot;,
+  &quot;detectRetina&quot;: false,
+  &quot;tms&quot;: false,
+  &quot;opacity&quot;: 1,
+}
+
+            );
+        
+    
+            tile_layer_d52e66c400220e86fb630e59c3c68601.addTo(map_b1db7fae55d3cd5dd7a022bf4f5769e8);
+        
+    
+            var circle_marker_4e273055ebbb64c7c49a396a146e0d82 = L.circleMarker(
+                [12.978369620812101, 77.57725238205838],
+                {&quot;bubblingMouseEvents&quot;: true, &quot;color&quot;: &quot;red&quot;, &quot;dashArray&quot;: null, &quot;dashOffset&quot;: null, &quot;fill&quot;: true, &quot;fillColor&quot;: &quot;red&quot;, &quot;fillOpacity&quot;: 0.7, &quot;fillRule&quot;: &quot;evenodd&quot;, &quot;lineCap&quot;: &quot;round&quot;, &quot;lineJoin&quot;: &quot;round&quot;, &quot;opacity&quot;: 1.0, &quot;radius&quot;: 21, &quot;stroke&quot;: true, &quot;weight&quot;: 3}
+            ).addTo(map_b1db7fae55d3cd5dd7a022bf4f5769e8);
+        
+    
+        var popup_b97677dfb6a54b31cb1b906ad6e69529 = L.popup({
+  &quot;maxWidth&quot;: 220,
+});
+
+        
+            
+                var html_1a9d70d8e6c8fcf2b18576a7a6292dc7 = $(`&lt;div id=&quot;html_1a9d70d8e6c8fcf2b18576a7a6292dc7&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;         &lt;div style=&#x27;font-family:Arial; font-size:13px; min-width:180px&#x27;&gt;           &lt;b&gt;Rank #1 — Zone 2&lt;/b&gt;&lt;br&gt;           &lt;hr style=&#x27;margin:4px 0&#x27;&gt;           Priority Score : &lt;b&gt;47.1750&lt;/b&gt;&lt;br&gt;           Tier           : &lt;b style=&#x27;color:red&#x27;&gt;HIGH&lt;/b&gt;&lt;br&gt;           Predicted Count: 31.4&lt;br&gt;           CIS Score      : 1.5000&lt;br&gt;           Junction       : Yes         &lt;/div&gt;         &lt;/div&gt;`)[0];
+                popup_b97677dfb6a54b31cb1b906ad6e69529.setContent(html_1a9d70d8e6c8fcf2b18576a7a6292dc7);
+            
+        
+
+        circle_marker_4e273055ebbb64c7c49a396a146e0d82.bindPopup(popup_b97677dfb6a54b31cb1b906ad6e69529)
+        ;
+
+        
+    
+    
+            circle_marker_4e273055ebbb64c7c49a396a146e0d82.bindTooltip(
+                `&lt;div&gt;
+                     #1 Zone 2 (HIGH)
+                 &lt;/div&gt;`,
+                {
+  &quot;sticky&quot;: true,
+}
+            );
+        
+    
+            var marker_2a82a83ec775807efad1358cbc2f3e4b = L.marker(
+                [12.978369620812101, 77.57725238205838],
+                {
+}
+            ).addTo(map_b1db7fae55d3cd5dd7a022bf4f5769e8);
+        
+    
+            var div_icon_c9602ef85f75617051e2ee5bd4323d49 = L.divIcon({
+  &quot;html&quot;: &quot;\u003cdiv style=\&quot;font-size:10px;font-weight:bold;color:white;text-align:center;line-height:20px\&quot;\u003e#1\u003c/div\u003e&quot;,
+  &quot;iconSize&quot;: [20, 20],
+  &quot;iconAnchor&quot;: [10, 10],
+  &quot;className&quot;: &quot;empty&quot;,
+});
+        
+    
+                marker_2a82a83ec775807efad1358cbc2f3e4b.setIcon(div_icon_c9602ef85f75617051e2ee5bd4323d49);
+            
+    
+            var circle_marker_f413d0326150073d3919167695ec48fe = L.circleMarker(
+                [12.936941775273482, 77.69110264098941],
+                {&quot;bubblingMouseEvents&quot;: true, &quot;color&quot;: &quot;green&quot;, &quot;dashArray&quot;: null, &quot;dashOffset&quot;: null, &quot;fill&quot;: true, &quot;fillColor&quot;: &quot;green&quot;, &quot;fillOpacity&quot;: 0.7, &quot;fillRule&quot;: &quot;evenodd&quot;, &quot;lineCap&quot;: &quot;round&quot;, &quot;lineJoin&quot;: &quot;round&quot;, &quot;opacity&quot;: 1.0, &quot;radius&quot;: 20, &quot;stroke&quot;: true, &quot;weight&quot;: 3}
+            ).addTo(map_b1db7fae55d3cd5dd7a022bf4f5769e8);
+        
+    
+        var popup_cfafe3b5ef41e2d2cfa04fddfcd5754f = L.popup({
+  &quot;maxWidth&quot;: 220,
+});
+
+        
+            
+                var html_c7f75870780689c043530e9973796b00 = $(`&lt;div id=&quot;html_c7f75870780689c043530e9973796b00&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;         &lt;div style=&#x27;font-family:Arial; font-size:13px; min-width:180px&#x27;&gt;           &lt;b&gt;Rank #2 — Zone 7&lt;/b&gt;&lt;br&gt;           &lt;hr style=&#x27;margin:4px 0&#x27;&gt;           Priority Score : &lt;b&gt;0.7525&lt;/b&gt;&lt;br&gt;           Tier           : &lt;b style=&#x27;color:green&#x27;&gt;LOW&lt;/b&gt;&lt;br&gt;           Predicted Count: 6.9&lt;br&gt;           CIS Score      : 0.1097&lt;br&gt;           Junction       : No         &lt;/div&gt;         &lt;/div&gt;`)[0];
+                popup_cfafe3b5ef41e2d2cfa04fddfcd5754f.setContent(html_c7f75870780689c043530e9973796b00);
+            
+        
+
+        circle_marker_f413d0326150073d3919167695ec48fe.bindPopup(popup_cfafe3b5ef41e2d2cfa04fddfcd5754f)
+        ;
+
+        
+    
+    
+            circle_marker_f413d0326150073d3919167695ec48fe.bindTooltip(
+                `&lt;div&gt;
+                     #2 Zone 7 (LOW)
+                 &lt;/div&gt;`,
+                {
+  &quot;sticky&quot;: true,
+}
+            );
+        
+    
+            var marker_ea34756380e657976306eb1809e8d499 = L.marker(
+                [12.936941775273482, 77.69110264098941],
+                {
+}
+            ).addTo(map_b1db7fae55d3cd5dd7a022bf4f5769e8);
+        
+    
+            var div_icon_66219c544084e135230e8e3f27b0e41f = L.divIcon({
+  &quot;html&quot;: &quot;\u003cdiv style=\&quot;font-size:10px;font-weight:bold;color:white;text-align:center;line-height:20px\&quot;\u003e#2\u003c/div\u003e&quot;,
+  &quot;iconSize&quot;: [20, 20],
+  &quot;iconAnchor&quot;: [10, 10],
+  &quot;className&quot;: &quot;empty&quot;,
+});
+        
+    
+                marker_ea34756380e657976306eb1809e8d499.setIcon(div_icon_66219c544084e135230e8e3f27b0e41f);
+            
+    
+            var circle_marker_720202c6a21d0b396736fd3e975ceaa2 = L.circleMarker(
+                [13.070995570643444, 77.58848696826247],
+                {&quot;bubblingMouseEvents&quot;: true, &quot;color&quot;: &quot;green&quot;, &quot;dashArray&quot;: null, &quot;dashOffset&quot;: null, &quot;fill&quot;: true, &quot;fillColor&quot;: &quot;green&quot;, &quot;fillOpacity&quot;: 0.7, &quot;fillRule&quot;: &quot;evenodd&quot;, &quot;lineCap&quot;: &quot;round&quot;, &quot;lineJoin&quot;: &quot;round&quot;, &quot;opacity&quot;: 1.0, &quot;radius&quot;: 19, &quot;stroke&quot;: true, &quot;weight&quot;: 3}
+            ).addTo(map_b1db7fae55d3cd5dd7a022bf4f5769e8);
+        
+    
+        var popup_d68541d8154738b7f2e74b8262f905b4 = L.popup({
+  &quot;maxWidth&quot;: 220,
+});
+
+        
+            
+                var html_57cd631c407e376c8eaef135d3e7ce73 = $(`&lt;div id=&quot;html_57cd631c407e376c8eaef135d3e7ce73&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;         &lt;div style=&#x27;font-family:Arial; font-size:13px; min-width:180px&#x27;&gt;           &lt;b&gt;Rank #3 — Zone 36&lt;/b&gt;&lt;br&gt;           &lt;hr style=&#x27;margin:4px 0&#x27;&gt;           Priority Score : &lt;b&gt;0.5274&lt;/b&gt;&lt;br&gt;           Tier           : &lt;b style=&#x27;color:green&#x27;&gt;LOW&lt;/b&gt;&lt;br&gt;           Predicted Count: 17.4&lt;br&gt;           CIS Score      : 0.0303&lt;br&gt;           Junction       : No         &lt;/div&gt;         &lt;/div&gt;`)[0];
+                popup_d68541d8154738b7f2e74b8262f905b4.setContent(html_57cd631c407e376c8eaef135d3e7ce73);
+            
+        
+
+        circle_marker_720202c6a21d0b396736fd3e975ceaa2.bindPopup(popup_d68541d8154738b7f2e74b8262f905b4)
+        ;
+
+        
+    
+    
+            circle_marker_720202c6a21d0b396736fd3e975ceaa2.bindTooltip(
+                `&lt;div&gt;
+                     #3 Zone 36 (LOW)
+                 &lt;/div&gt;`,
+                {
+  &quot;sticky&quot;: true,
+}
+            );
+        
+    
+            var marker_63aee0f0c77b1eac937d72157742b784 = L.marker(
+                [13.070995570643444, 77.58848696826247],
+                {
+}
+            ).addTo(map_b1db7fae55d3cd5dd7a022bf4f5769e8);
+        
+    
+            var div_icon_bd6dea88a0d3a63e43f0c08926bd3b5c = L.divIcon({
+  &quot;html&quot;: &quot;\u003cdiv style=\&quot;font-size:10px;font-weight:bold;color:white;text-align:center;line-height:20px\&quot;\u003e#3\u003c/div\u003e&quot;,
+  &quot;iconSize&quot;: [20, 20],
+  &quot;iconAnchor&quot;: [10, 10],
+  &quot;className&quot;: &quot;empty&quot;,
+});
+        
+    
+                marker_63aee0f0c77b1eac937d72157742b784.setIcon(div_icon_bd6dea88a0d3a63e43f0c08926bd3b5c);
+            
+    
+            var circle_marker_ac2185f1b074ad5e44d6d4f14d789952 = L.circleMarker(
+                [12.95122419445487, 77.52985917386319],
+                {&quot;bubblingMouseEvents&quot;: true, &quot;color&quot;: &quot;green&quot;, &quot;dashArray&quot;: null, &quot;dashOffset&quot;: null, &quot;fill&quot;: true, &quot;fillColor&quot;: &quot;green&quot;, &quot;fillOpacity&quot;: 0.7, &quot;fillRule&quot;: &quot;evenodd&quot;, &quot;lineCap&quot;: &quot;round&quot;, &quot;lineJoin&quot;: &quot;round&quot;, &quot;opacity&quot;: 1.0, &quot;radius&quot;: 18, &quot;stroke&quot;: true, &quot;weight&quot;: 3}
+            ).addTo(map_b1db7fae55d3cd5dd7a022bf4f5769e8);
+        
+    
+        var popup_b7eacd23422ea53094abf4cd8c6c3e61 = L.popup({
+  &quot;maxWidth&quot;: 220,
+});
+
+        
+            
+                var html_1d76a8cae1e04b0f93a9529adc1edfba = $(`&lt;div id=&quot;html_1d76a8cae1e04b0f93a9529adc1edfba&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;         &lt;div style=&#x27;font-family:Arial; font-size:13px; min-width:180px&#x27;&gt;           &lt;b&gt;Rank #4 — Zone 1&lt;/b&gt;&lt;br&gt;           &lt;hr style=&#x27;margin:4px 0&#x27;&gt;           Priority Score : &lt;b&gt;0.1859&lt;/b&gt;&lt;br&gt;           Tier           : &lt;b style=&#x27;color:green&#x27;&gt;LOW&lt;/b&gt;&lt;br&gt;           Predicted Count: 5.1&lt;br&gt;           CIS Score      : 0.0364&lt;br&gt;           Junction       : Yes         &lt;/div&gt;         &lt;/div&gt;`)[0];
+                popup_b7eacd23422ea53094abf4cd8c6c3e61.setContent(html_1d76a8cae1e04b0f93a9529adc1edfba);
+            
+        
+
+        circle_marker_ac2185f1b074ad5e44d6d4f14d789952.bindPopup(popup_b7eacd23422ea53094abf4cd8c6c3e61)
+        ;
+
+        
+    
+    
+            circle_marker_ac2185f1b074ad5e44d6d4f14d789952.bindTooltip(
+                `&lt;div&gt;
+                     #4 Zone 1 (LOW)
+                 &lt;/div&gt;`,
+                {
+  &quot;sticky&quot;: true,
+}
+            );
+        
+    
+            var marker_24a01f44fc5bb5f29253b4b4bc1f6d2b = L.marker(
+                [12.95122419445487, 77.52985917386319],
+                {
+}
+            ).addTo(map_b1db7fae55d3cd5dd7a022bf4f5769e8);
+        
+    
+            var div_icon_b59e256055418ddbaba253bd17f34254 = L.divIcon({
+  &quot;html&quot;: &quot;\u003cdiv style=\&quot;font-size:10px;font-weight:bold;color:white;text-align:center;line-height:20px\&quot;\u003e#4\u003c/div\u003e&quot;,
+  &quot;iconSize&quot;: [20, 20],
+  &quot;iconAnchor&quot;: [10, 10],
+  &quot;className&quot;: &quot;empty&quot;,
+});
+        
+    
+                marker_24a01f44fc5bb5f29253b4b4bc1f6d2b.setIcon(div_icon_b59e256055418ddbaba253bd17f34254);
+            
+    
+            var circle_marker_b89968ef624f1121c0251cdc50ac69e3 = L.circleMarker(
+                [12.960786379649779, 77.52840571112671],
+                {&quot;bubblingMouseEvents&quot;: true, &quot;color&quot;: &quot;green&quot;, &quot;dashArray&quot;: null, &quot;dashOffset&quot;: null, &quot;fill&quot;: true, &quot;fillColor&quot;: &quot;green&quot;, &quot;fillOpacity&quot;: 0.7, &quot;fillRule&quot;: &quot;evenodd&quot;, &quot;lineCap&quot;: &quot;round&quot;, &quot;lineJoin&quot;: &quot;round&quot;, &quot;opacity&quot;: 1.0, &quot;radius&quot;: 17, &quot;stroke&quot;: true, &quot;weight&quot;: 3}
+            ).addTo(map_b1db7fae55d3cd5dd7a022bf4f5769e8);
+        
+    
+        var popup_6eafce870fd3beb850ec50a1baa3fd99 = L.popup({
+  &quot;maxWidth&quot;: 220,
+});
+
+        
+            
+                var html_6b1ef2603ad842f75f372469476a7e2c = $(`&lt;div id=&quot;html_6b1ef2603ad842f75f372469476a7e2c&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;         &lt;div style=&#x27;font-family:Arial; font-size:13px; min-width:180px&#x27;&gt;           &lt;b&gt;Rank #5 — Zone 70&lt;/b&gt;&lt;br&gt;           &lt;hr style=&#x27;margin:4px 0&#x27;&gt;           Priority Score : &lt;b&gt;0.1625&lt;/b&gt;&lt;br&gt;           Tier           : &lt;b style=&#x27;color:green&#x27;&gt;LOW&lt;/b&gt;&lt;br&gt;           Predicted Count: 19.6&lt;br&gt;           CIS Score      : 0.0083&lt;br&gt;           Junction       : Yes         &lt;/div&gt;         &lt;/div&gt;`)[0];
+                popup_6eafce870fd3beb850ec50a1baa3fd99.setContent(html_6b1ef2603ad842f75f372469476a7e2c);
+            
+        
+
+        circle_marker_b89968ef624f1121c0251cdc50ac69e3.bindPopup(popup_6eafce870fd3beb850ec50a1baa3fd99)
+        ;
+
+        
+    
+    
+            circle_marker_b89968ef624f1121c0251cdc50ac69e3.bindTooltip(
+                `&lt;div&gt;
+                     #5 Zone 70 (LOW)
+                 &lt;/div&gt;`,
+                {
+  &quot;sticky&quot;: true,
+}
+            );
+        
+    
+            var marker_f2d283dec2e8bcf631f493b0d0faa5fb = L.marker(
+                [12.960786379649779, 77.52840571112671],
+                {
+}
+            ).addTo(map_b1db7fae55d3cd5dd7a022bf4f5769e8);
+        
+    
+            var div_icon_bf869938f6010626f89753245272251b = L.divIcon({
+  &quot;html&quot;: &quot;\u003cdiv style=\&quot;font-size:10px;font-weight:bold;color:white;text-align:center;line-height:20px\&quot;\u003e#5\u003c/div\u003e&quot;,
+  &quot;iconSize&quot;: [20, 20],
+  &quot;iconAnchor&quot;: [10, 10],
+  &quot;className&quot;: &quot;empty&quot;,
+});
+        
+    
+                marker_f2d283dec2e8bcf631f493b0d0faa5fb.setIcon(div_icon_bf869938f6010626f89753245272251b);
+            
+    
+            var circle_marker_08ab791b1d57707b789be78393e79da7 = L.circleMarker(
+                [12.965471749978418, 77.71560484979675],
+                {&quot;bubblingMouseEvents&quot;: true, &quot;color&quot;: &quot;green&quot;, &quot;dashArray&quot;: null, &quot;dashOffset&quot;: null, &quot;fill&quot;: true, &quot;fillColor&quot;: &quot;green&quot;, &quot;fillOpacity&quot;: 0.7, &quot;fillRule&quot;: &quot;evenodd&quot;, &quot;lineCap&quot;: &quot;round&quot;, &quot;lineJoin&quot;: &quot;round&quot;, &quot;opacity&quot;: 1.0, &quot;radius&quot;: 16, &quot;stroke&quot;: true, &quot;weight&quot;: 3}
+            ).addTo(map_b1db7fae55d3cd5dd7a022bf4f5769e8);
+        
+    
+        var popup_4709a48dd1c67502a24c6e3a0a792213 = L.popup({
+  &quot;maxWidth&quot;: 220,
+});
+
+        
+            
+                var html_549392cf869d03ad866c109cec5e60d1 = $(`&lt;div id=&quot;html_549392cf869d03ad866c109cec5e60d1&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;         &lt;div style=&#x27;font-family:Arial; font-size:13px; min-width:180px&#x27;&gt;           &lt;b&gt;Rank #6 — Zone 39&lt;/b&gt;&lt;br&gt;           &lt;hr style=&#x27;margin:4px 0&#x27;&gt;           Priority Score : &lt;b&gt;0.1508&lt;/b&gt;&lt;br&gt;           Tier           : &lt;b style=&#x27;color:green&#x27;&gt;LOW&lt;/b&gt;&lt;br&gt;           Predicted Count: 5.7&lt;br&gt;           CIS Score      : 0.0264&lt;br&gt;           Junction       : No         &lt;/div&gt;         &lt;/div&gt;`)[0];
+                popup_4709a48dd1c67502a24c6e3a0a792213.setContent(html_549392cf869d03ad866c109cec5e60d1);
+            
+        
+
+        circle_marker_08ab791b1d57707b789be78393e79da7.bindPopup(popup_4709a48dd1c67502a24c6e3a0a792213)
+        ;
+
+        
+    
+    
+            circle_marker_08ab791b1d57707b789be78393e79da7.bindTooltip(
+                `&lt;div&gt;
+                     #6 Zone 39 (LOW)
+                 &lt;/div&gt;`,
+                {
+  &quot;sticky&quot;: true,
+}
+            );
+        
+    
+            var marker_7293595018012f70e6b06b5289d7dad1 = L.marker(
+                [12.965471749978418, 77.71560484979675],
+                {
+}
+            ).addTo(map_b1db7fae55d3cd5dd7a022bf4f5769e8);
+        
+    
+            var div_icon_321c7e17b194c5e64750c1cc164e32a7 = L.divIcon({
+  &quot;html&quot;: &quot;\u003cdiv style=\&quot;font-size:10px;font-weight:bold;color:white;text-align:center;line-height:20px\&quot;\u003e#6\u003c/div\u003e&quot;,
+  &quot;iconSize&quot;: [20, 20],
+  &quot;iconAnchor&quot;: [10, 10],
+  &quot;className&quot;: &quot;empty&quot;,
+});
+        
+    
+                marker_7293595018012f70e6b06b5289d7dad1.setIcon(div_icon_321c7e17b194c5e64750c1cc164e32a7);
+            
+    
+            var circle_marker_222b2551a76154113c5546b16c53a204 = L.circleMarker(
+                [12.902263975262942, 77.63604093604079],
+                {&quot;bubblingMouseEvents&quot;: true, &quot;color&quot;: &quot;green&quot;, &quot;dashArray&quot;: null, &quot;dashOffset&quot;: null, &quot;fill&quot;: true, &quot;fillColor&quot;: &quot;green&quot;, &quot;fillOpacity&quot;: 0.7, &quot;fillRule&quot;: &quot;evenodd&quot;, &quot;lineCap&quot;: &quot;round&quot;, &quot;lineJoin&quot;: &quot;round&quot;, &quot;opacity&quot;: 1.0, &quot;radius&quot;: 15, &quot;stroke&quot;: true, &quot;weight&quot;: 3}
+            ).addTo(map_b1db7fae55d3cd5dd7a022bf4f5769e8);
+        
+    
+        var popup_855c7b02b4c07b67b2c3c3711f428fab = L.popup({
+  &quot;maxWidth&quot;: 220,
+});
+
+        
+            
+                var html_cbba7b80a1e24d08d1ee4ebfdcd66f39 = $(`&lt;div id=&quot;html_cbba7b80a1e24d08d1ee4ebfdcd66f39&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;         &lt;div style=&#x27;font-family:Arial; font-size:13px; min-width:180px&#x27;&gt;           &lt;b&gt;Rank #7 — Zone 4&lt;/b&gt;&lt;br&gt;           &lt;hr style=&#x27;margin:4px 0&#x27;&gt;           Priority Score : &lt;b&gt;0.1315&lt;/b&gt;&lt;br&gt;           Tier           : &lt;b style=&#x27;color:green&#x27;&gt;LOW&lt;/b&gt;&lt;br&gt;           Predicted Count: 3.7&lt;br&gt;           CIS Score      : 0.0353&lt;br&gt;           Junction       : No         &lt;/div&gt;         &lt;/div&gt;`)[0];
+                popup_855c7b02b4c07b67b2c3c3711f428fab.setContent(html_cbba7b80a1e24d08d1ee4ebfdcd66f39);
+            
+        
+
+        circle_marker_222b2551a76154113c5546b16c53a204.bindPopup(popup_855c7b02b4c07b67b2c3c3711f428fab)
+        ;
+
+        
+    
+    
+            circle_marker_222b2551a76154113c5546b16c53a204.bindTooltip(
+                `&lt;div&gt;
+                     #7 Zone 4 (LOW)
+                 &lt;/div&gt;`,
+                {
+  &quot;sticky&quot;: true,
+}
+            );
+        
+    
+            var marker_7e5e991d67a62b4001ef21da657bbf88 = L.marker(
+                [12.902263975262942, 77.63604093604079],
+                {
+}
+            ).addTo(map_b1db7fae55d3cd5dd7a022bf4f5769e8);
+        
+    
+            var div_icon_3d4e1feeecde7fe1f63072aa5dcba411 = L.divIcon({
+  &quot;html&quot;: &quot;\u003cdiv style=\&quot;font-size:10px;font-weight:bold;color:white;text-align:center;line-height:20px\&quot;\u003e#7\u003c/div\u003e&quot;,
+  &quot;iconSize&quot;: [20, 20],
+  &quot;iconAnchor&quot;: [10, 10],
+  &quot;className&quot;: &quot;empty&quot;,
+});
+        
+    
+                marker_7e5e991d67a62b4001ef21da657bbf88.setIcon(div_icon_3d4e1feeecde7fe1f63072aa5dcba411);
+            
+    
+            var circle_marker_5da78fb093b160ca15a7d688910af9f0 = L.circleMarker(
+                [13.007835068944825, 77.69306830179949],
+                {&quot;bubblingMouseEvents&quot;: true, &quot;color&quot;: &quot;green&quot;, &quot;dashArray&quot;: null, &quot;dashOffset&quot;: null, &quot;fill&quot;: true, &quot;fillColor&quot;: &quot;green&quot;, &quot;fillOpacity&quot;: 0.7, &quot;fillRule&quot;: &quot;evenodd&quot;, &quot;lineCap&quot;: &quot;round&quot;, &quot;lineJoin&quot;: &quot;round&quot;, &quot;opacity&quot;: 1.0, &quot;radius&quot;: 14, &quot;stroke&quot;: true, &quot;weight&quot;: 3}
+            ).addTo(map_b1db7fae55d3cd5dd7a022bf4f5769e8);
+        
+    
+        var popup_6345b8aa944dff6bf0749e4c971a8c69 = L.popup({
+  &quot;maxWidth&quot;: 220,
+});
+
+        
+            
+                var html_d2d917bb0ca1ca4e5b22ee56db7c77f5 = $(`&lt;div id=&quot;html_d2d917bb0ca1ca4e5b22ee56db7c77f5&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;         &lt;div style=&#x27;font-family:Arial; font-size:13px; min-width:180px&#x27;&gt;           &lt;b&gt;Rank #8 — Zone 3&lt;/b&gt;&lt;br&gt;           &lt;hr style=&#x27;margin:4px 0&#x27;&gt;           Priority Score : &lt;b&gt;0.1268&lt;/b&gt;&lt;br&gt;           Tier           : &lt;b style=&#x27;color:green&#x27;&gt;LOW&lt;/b&gt;&lt;br&gt;           Predicted Count: 3.9&lt;br&gt;           CIS Score      : 0.0325&lt;br&gt;           Junction       : No         &lt;/div&gt;         &lt;/div&gt;`)[0];
+                popup_6345b8aa944dff6bf0749e4c971a8c69.setContent(html_d2d917bb0ca1ca4e5b22ee56db7c77f5);
+            
+        
+
+        circle_marker_5da78fb093b160ca15a7d688910af9f0.bindPopup(popup_6345b8aa944dff6bf0749e4c971a8c69)
+        ;
+
+        
+    
+    
+            circle_marker_5da78fb093b160ca15a7d688910af9f0.bindTooltip(
+                `&lt;div&gt;
+                     #8 Zone 3 (LOW)
+                 &lt;/div&gt;`,
+                {
+  &quot;sticky&quot;: true,
+}
+            );
+        
+    
+            var marker_7c8526c051150ce526e774d047ff8426 = L.marker(
+                [13.007835068944825, 77.69306830179949],
+                {
+}
+            ).addTo(map_b1db7fae55d3cd5dd7a022bf4f5769e8);
+        
+    
+            var div_icon_15fb98e1163b80a8500bc99778ef7dfc = L.divIcon({
+  &quot;html&quot;: &quot;\u003cdiv style=\&quot;font-size:10px;font-weight:bold;color:white;text-align:center;line-height:20px\&quot;\u003e#8\u003c/div\u003e&quot;,
+  &quot;iconSize&quot;: [20, 20],
+  &quot;iconAnchor&quot;: [10, 10],
+  &quot;className&quot;: &quot;empty&quot;,
+});
+        
+    
+                marker_7c8526c051150ce526e774d047ff8426.setIcon(div_icon_15fb98e1163b80a8500bc99778ef7dfc);
+            
+    
+            var circle_marker_f3a649276549b3348378291f010c1472 = L.circleMarker(
+                [13.031974714594147, 77.58898742461537],
+                {&quot;bubblingMouseEvents&quot;: true, &quot;color&quot;: &quot;green&quot;, &quot;dashArray&quot;: null, &quot;dashOffset&quot;: null, &quot;fill&quot;: true, &quot;fillColor&quot;: &quot;green&quot;, &quot;fillOpacity&quot;: 0.7, &quot;fillRule&quot;: &quot;evenodd&quot;, &quot;lineCap&quot;: &quot;round&quot;, &quot;lineJoin&quot;: &quot;round&quot;, &quot;opacity&quot;: 1.0, &quot;radius&quot;: 13, &quot;stroke&quot;: true, &quot;weight&quot;: 3}
+            ).addTo(map_b1db7fae55d3cd5dd7a022bf4f5769e8);
+        
+    
+        var popup_bfac205763d9421755354ee1f01bf02b = L.popup({
+  &quot;maxWidth&quot;: 220,
+});
+
+        
+            
+                var html_cfa73b3136ee6ce9600d095fb2a59738 = $(`&lt;div id=&quot;html_cfa73b3136ee6ce9600d095fb2a59738&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;         &lt;div style=&#x27;font-family:Arial; font-size:13px; min-width:180px&#x27;&gt;           &lt;b&gt;Rank #9 — Zone 27&lt;/b&gt;&lt;br&gt;           &lt;hr style=&#x27;margin:4px 0&#x27;&gt;           Priority Score : &lt;b&gt;0.1196&lt;/b&gt;&lt;br&gt;           Tier           : &lt;b style=&#x27;color:green&#x27;&gt;LOW&lt;/b&gt;&lt;br&gt;           Predicted Count: 2.9&lt;br&gt;           CIS Score      : 0.0412&lt;br&gt;           Junction       : Yes         &lt;/div&gt;         &lt;/div&gt;`)[0];
+                popup_bfac205763d9421755354ee1f01bf02b.setContent(html_cfa73b3136ee6ce9600d095fb2a59738);
+            
+        
+
+        circle_marker_f3a649276549b3348378291f010c1472.bindPopup(popup_bfac205763d9421755354ee1f01bf02b)
+        ;
+
+        
+    
+    
+            circle_marker_f3a649276549b3348378291f010c1472.bindTooltip(
+                `&lt;div&gt;
+                     #9 Zone 27 (LOW)
+                 &lt;/div&gt;`,
+                {
+  &quot;sticky&quot;: true,
+}
+            );
+        
+    
+            var marker_ea31593d2ba1de367cf1997ad7d88df5 = L.marker(
+                [13.031974714594147, 77.58898742461537],
+                {
+}
+            ).addTo(map_b1db7fae55d3cd5dd7a022bf4f5769e8);
+        
+    
+            var div_icon_8401683e51d3cc9cd9ca11eb7746e5b6 = L.divIcon({
+  &quot;html&quot;: &quot;\u003cdiv style=\&quot;font-size:10px;font-weight:bold;color:white;text-align:center;line-height:20px\&quot;\u003e#9\u003c/div\u003e&quot;,
+  &quot;iconSize&quot;: [20, 20],
+  &quot;iconAnchor&quot;: [10, 10],
+  &quot;className&quot;: &quot;empty&quot;,
+});
+        
+    
+                marker_ea31593d2ba1de367cf1997ad7d88df5.setIcon(div_icon_8401683e51d3cc9cd9ca11eb7746e5b6);
+            
+    
+            var circle_marker_5264bbfcfe0d536e00a02bd9ba1072f3 = L.circleMarker(
+                [12.933681377985348, 77.61679294789627],
+                {&quot;bubblingMouseEvents&quot;: true, &quot;color&quot;: &quot;green&quot;, &quot;dashArray&quot;: null, &quot;dashOffset&quot;: null, &quot;fill&quot;: true, &quot;fillColor&quot;: &quot;green&quot;, &quot;fillOpacity&quot;: 0.7, &quot;fillRule&quot;: &quot;evenodd&quot;, &quot;lineCap&quot;: &quot;round&quot;, &quot;lineJoin&quot;: &quot;round&quot;, &quot;opacity&quot;: 1.0, &quot;radius&quot;: 12, &quot;stroke&quot;: true, &quot;weight&quot;: 3}
+            ).addTo(map_b1db7fae55d3cd5dd7a022bf4f5769e8);
+        
+    
+        var popup_180bfa961bc423180d0cb2e40df63058 = L.popup({
+  &quot;maxWidth&quot;: 220,
+});
+
+        
+            
+                var html_d6e9c60124f2282fb078cc20b557fd05 = $(`&lt;div id=&quot;html_d6e9c60124f2282fb078cc20b557fd05&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;         &lt;div style=&#x27;font-family:Arial; font-size:13px; min-width:180px&#x27;&gt;           &lt;b&gt;Rank #10 — Zone 29&lt;/b&gt;&lt;br&gt;           &lt;hr style=&#x27;margin:4px 0&#x27;&gt;           Priority Score : &lt;b&gt;0.1112&lt;/b&gt;&lt;br&gt;           Tier           : &lt;b style=&#x27;color:green&#x27;&gt;LOW&lt;/b&gt;&lt;br&gt;           Predicted Count: 2.9&lt;br&gt;           CIS Score      : 0.0386&lt;br&gt;           Junction       : Yes         &lt;/div&gt;         &lt;/div&gt;`)[0];
+                popup_180bfa961bc423180d0cb2e40df63058.setContent(html_d6e9c60124f2282fb078cc20b557fd05);
+            
+        
+
+        circle_marker_5264bbfcfe0d536e00a02bd9ba1072f3.bindPopup(popup_180bfa961bc423180d0cb2e40df63058)
+        ;
+
+        
+    
+    
+            circle_marker_5264bbfcfe0d536e00a02bd9ba1072f3.bindTooltip(
+                `&lt;div&gt;
+                     #10 Zone 29 (LOW)
+                 &lt;/div&gt;`,
+                {
+  &quot;sticky&quot;: true,
+}
+            );
+        
+    
+            var marker_02fdca0588285b8097ee6a6b8923168a = L.marker(
+                [12.933681377985348, 77.61679294789627],
+                {
+}
+            ).addTo(map_b1db7fae55d3cd5dd7a022bf4f5769e8);
+        
+    
+            var div_icon_098555984e3579c87e956ebb17d88421 = L.divIcon({
+  &quot;html&quot;: &quot;\u003cdiv style=\&quot;font-size:10px;font-weight:bold;color:white;text-align:center;line-height:20px\&quot;\u003e#10\u003c/div\u003e&quot;,
+  &quot;iconSize&quot;: [20, 20],
+  &quot;iconAnchor&quot;: [10, 10],
+  &quot;className&quot;: &quot;empty&quot;,
+});
+        
+    
+                marker_02fdca0588285b8097ee6a6b8923168a.setIcon(div_icon_098555984e3579c87e956ebb17d88421);
+            
+&lt;/script&gt;
+&lt;/html&gt;" style="position:absolute;width:100%;height:100%;left:0;top:0;border:none !important;" allowfullscreen webkitallowfullscreen mozallowfullscreen></iframe></div></div>
+    </div>
+  </div>
+
+  <div class="card" style="grid-column: 1 / 3;">
+    <div class="card-header">📊 Model Evaluation Scorecard — XGBOOST / hour</div>
+    <div class="card-body">
+      
+    <div class='scorecard-grid'>
+      <div class='score-block'>
+        <div class='score-label'>MAE (test)</div>
+        <div class='score-value'>4.682</div>
+        <div style='background:#eee;border-radius:4px;height:8px;margin:4px 0'><div style='background:#3498db;width:17.6%;height:100%;border-radius:4px'></div></div>
+        <div class='score-sub'>Naive: 6.971
+          &nbsp;<span style='color:#27ae60;font-weight:bold'>+32.8% vs naive</span>
+        </div>
+      </div>
+      <div class='score-block'>
+        <div class='score-label'>RMSE (test)</div>
+        <div class='score-value'>10.661</div>
+        <div style='background:#eee;border-radius:4px;height:8px;margin:4px 0'><div style='background:#8e44ad;width:8.6%;height:100%;border-radius:4px'></div></div>
+        <div class='score-sub'>Model: XGBOOST | Res: hour</div>
+      </div>
+      <div class='score-block'>
+        <div class='score-label'>NDCG@10</div>
+        <div class='score-value' style='color:#e67e22'>1.0000</div>
+        <div style='background:#eee;border-radius:4px;height:8px;margin:4px 0'><div style='background:#e67e22;width:100.0%;height:100%;border-radius:4px'></div></div>
+        <div class='score-sub'>Freq baseline: 1.0000</div>
+      </div>
+      <div class='score-block'>
+        <div class='score-label'>Precision@10</div>
+        <div class='score-value' style='color:#e67e22'>1.0000</div>
+        <div style='background:#eee;border-radius:4px;height:8px;margin:4px 0'><div style='background:#e67e22;width:100.0%;height:100%;border-radius:4px'></div></div>
+        <div class='score-sub'>Freq baseline: 1.0000</div>
+      </div>
+      <div class='score-block'>
+        <div class='score-label'>ML Lift vs Naive</div>
+        <div class='score-value' style='color:#27ae60'>+32.8%</div>
+        <div class='score-sub'>
+          ✓ Beats naive predictor
+        </div>
+      </div>
+      <div class='score-block'>
+        <div class='score-label'>Rounds Trained</div>
+        <div class='score-value'>128</div>
+        <div class='score-sub'>Early-stop @ 20 patience</div>
+      </div>
+    </div>
+    </div>
+  </div>
+
+  <div class="card" style="grid-column: 1 / 3;">
+    <div class="card-header">🏆 Top 10 Enforcement Priority Zones</div>
+    <div class="card-body">
+      
+    <table style='border-collapse:collapse; width:100%; font-family:Arial; font-size:14px'>
+      <thead>
+        <tr style='background:#2c3e50; color:white'>
+          <th style='padding:8px'>Rank</th>
+          <th style='padding:8px'>Zone ID</th>
+          <th style='padding:8px'>Priority</th>
+          <th style='padding:8px'>Priority Score</th>
+          <th style='padding:8px'>Predicted Count</th>
+          <th style='padding:8px'>CIS Score</th>
+          <th style='padding:8px'>Junction</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><tdstyle='text-align:center;font-weight:bold'>1</td><tdstyle='text-align:center'>2</td><tdstyle='text-align:center;font-weight:bold;color:#c0392b'>HIGH</td><tdstyle='text-align:right'>47.1750</td><tdstyle='text-align:right'>31.4</td><tdstyle='text-align:right'>1.5000</td><tdstyle='text-align:center'>✓</td></tr><tr><tdstyle='text-align:center;font-weight:bold'>2</td><tdstyle='text-align:center'>7</td><tdstyle='text-align:center;font-weight:bold;color:#27ae60'>LOW</td><tdstyle='text-align:right'>0.7525</td><tdstyle='text-align:right'>6.9</td><tdstyle='text-align:right'>0.1097</td><tdstyle='text-align:center'>—</td></tr><tr><tdstyle='text-align:center;font-weight:bold'>3</td><tdstyle='text-align:center'>36</td><tdstyle='text-align:center;font-weight:bold;color:#27ae60'>LOW</td><tdstyle='text-align:right'>0.5274</td><tdstyle='text-align:right'>17.4</td><tdstyle='text-align:right'>0.0303</td><tdstyle='text-align:center'>—</td></tr><tr><tdstyle='text-align:center;font-weight:bold'>4</td><tdstyle='text-align:center'>1</td><tdstyle='text-align:center;font-weight:bold;color:#27ae60'>LOW</td><tdstyle='text-align:right'>0.1859</td><tdstyle='text-align:right'>5.1</td><tdstyle='text-align:right'>0.0364</td><tdstyle='text-align:center'>✓</td></tr><tr><tdstyle='text-align:center;font-weight:bold'>5</td><tdstyle='text-align:center'>70</td><tdstyle='text-align:center;font-weight:bold;color:#27ae60'>LOW</td><tdstyle='text-align:right'>0.1625</td><tdstyle='text-align:right'>19.6</td><tdstyle='text-align:right'>0.0083</td><tdstyle='text-align:center'>✓</td></tr><tr><tdstyle='text-align:center;font-weight:bold'>6</td><tdstyle='text-align:center'>39</td><tdstyle='text-align:center;font-weight:bold;color:#27ae60'>LOW</td><tdstyle='text-align:right'>0.1508</td><tdstyle='text-align:right'>5.7</td><tdstyle='text-align:right'>0.0264</td><tdstyle='text-align:center'>—</td></tr><tr><tdstyle='text-align:center;font-weight:bold'>7</td><tdstyle='text-align:center'>4</td><tdstyle='text-align:center;font-weight:bold;color:#27ae60'>LOW</td><tdstyle='text-align:right'>0.1315</td><tdstyle='text-align:right'>3.7</td><tdstyle='text-align:right'>0.0353</td><tdstyle='text-align:center'>—</td></tr><tr><tdstyle='text-align:center;font-weight:bold'>8</td><tdstyle='text-align:center'>3</td><tdstyle='text-align:center;font-weight:bold;color:#27ae60'>LOW</td><tdstyle='text-align:right'>0.1268</td><tdstyle='text-align:right'>3.9</td><tdstyle='text-align:right'>0.0325</td><tdstyle='text-align:center'>—</td></tr><tr><tdstyle='text-align:center;font-weight:bold'>9</td><tdstyle='text-align:center'>27</td><tdstyle='text-align:center;font-weight:bold;color:#27ae60'>LOW</td><tdstyle='text-align:right'>0.1196</td><tdstyle='text-align:right'>2.9</td><tdstyle='text-align:right'>0.0412</td><tdstyle='text-align:center'>✓</td></tr><tr><tdstyle='text-align:center;font-weight:bold'>10</td><tdstyle='text-align:center'>29</td><tdstyle='text-align:center;font-weight:bold;color:#27ae60'>LOW</td><tdstyle='text-align:right'>0.1112</td><tdstyle='text-align:right'>2.9</td><tdstyle='text-align:right'>0.0386</td><tdstyle='text-align:center'>✓</td></tr>
+      </tbody>
+    </table>
+      <div class="formula-box">
+        <strong>Ranker formula v1.0:</strong>
+        priority_score(zone, t) = predicted_violation_count(zone, t) × CIS(zone)<br>
+        <strong>CIS formula v1.0:</strong>
+        CIS(zone) = violation_density_norm(zone) × junction_weight (1.5 at junction, 1.0 otherwise)
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  GridLock R2 — Bengaluru Parking Violation AI | Prototype Demo | Data: Jan–May 2024 Police Violations
+</footer>
+
+</body>
+</html>
