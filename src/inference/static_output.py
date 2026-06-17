@@ -193,7 +193,7 @@ def _build_table_html(top_k_df: pd.DataFrame) -> str:
         </tr>
       </thead>
       <tbody>
-        {''.join(rows_html.split()[:999999])}
+        {rows_html}
       </tbody>
     </table>"""
 
