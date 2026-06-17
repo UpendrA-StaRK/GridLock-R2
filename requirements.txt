@@ -1,0 +1,16 @@
+pandas
+numpy
+scikit-learn
+xgboost
+lightgbm
+catboost
+folium
+tqdm
+loguru
+pyyaml
+pathlib2
+pyarrow
+matplotlib
+scipy
+seaborn
+shap
