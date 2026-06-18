@@ -41,3 +41,5 @@ scripts/update_shap_gate3.py
 # Windows junk
 Thumbs.db
 Desktop.ini
+
+phase3_impact_summary.md
