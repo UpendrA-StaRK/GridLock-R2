@@ -1,2 +1,32 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# GridLock R2 — Git line ending rules
+# Ensures consistent LF line endings in the repo regardless of OS.
+# Windows users: set git config core.autocrlf false after cloning.
+
+* text=auto eol=lf
+
+# Notebooks — keep as-is (JSON, LF is fine)
+*.ipynb text eol=lf
+
+# Python
+*.py text eol=lf
+
+# Config / docs / markdown
+*.yaml text eol=lf
+*.yml  text eol=lf
+*.md   text eol=lf
+*.txt  text eol=lf
+*.json text eol=lf
+*.csv  text eol=lf
+
+# HTML output
+*.html text eol=lf
+
+# Binary — do not touch
+*.png  binary
+*.npz  binary
+*.xgb  binary
+*.lgb  binary
+*.cbm  binary
+*.pkl  binary
+*.pt   binary
+*.parquet binary
