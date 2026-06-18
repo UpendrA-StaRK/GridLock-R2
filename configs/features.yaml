@@ -10,9 +10,20 @@
 
 # ── Temporal Features ─────────────────────────────────────────────
 # Extracted from created_datetime (UTC → IST for display, UTC for computation)
+#
+# Phase 3 change (v2.1): hour_of_day and day_of_week replaced with cyclical
+# sin/cos encoding. Raw integers create an artificial "boundary" where hour 23
+# and hour 0 appear numerically far apart, but they are temporally adjacent.
+# Cyclical encoding maps each value onto a circle:
+#   hour_sin = sin(2π × hour / 24)    hour_cos = cos(2π × hour / 24)
+#   dow_sin  = sin(2π × dow / 7)     dow_cos  = cos(2π × dow / 7)
+# XGBoost converges faster and generalises better at hour/day boundaries.
+# Reference: arXiv energy/traffic forecasting studies, towardsdatascience.com
 temporal:
-  - hour_of_day          # int [0, 23]  — violations spike at 9-10am, 5-7pm
-  - day_of_week          # int [0, 6]   — 0=Monday, 6=Sunday (was missing from model — FIXED)
+  - hour_sin             # float — sin(2π × hour_of_day / 24)
+  - hour_cos             # float — cos(2π × hour_of_day / 24)
+  - dow_sin              # float — sin(2π × day_of_week / 7)
+  - dow_cos              # float — cos(2π × day_of_week / 7)
   - is_weekend           # int [0, 1]   — Saturday + Sunday = 1
   - month                # int [1, 12]  — captures seasonal enforcement patterns
 
@@ -119,15 +130,14 @@ encodings:
   # police_station_id and center_code_encoded are REMOVED (Phase 1 — collinear with zone)
 
 # ── Version / Metadata ────────────────────────────────────────────
-version: "2.0"
-last_updated: "2026-06-17"
-updated_by: "GridLock Phase 1 Improvement"
-basis: "Full audit 2026-06-17 — full_audit.md Phase 1 fix"
+version: "2.1"
+last_updated: "2026-06-18"
+updated_by: "GridLock Phase 3 Improvement"
+basis: "Full research audit 2026-06-18 — cyclical encoding for temporal features"
 note: >
-  Features v2.0 (Phase 1 overhaul): removed zone_id, police_station_id, center_code_encoded
-  from the training feature set. Replaced zone_id with zone_aggregates that capture zone
-  characteristics without ordinal identity assumptions. This forces the model to generalize
-  from zone properties (mean count, CIS score, junction fraction) rather than memorizing
-  zone_id → count lookup tables. Retrain required when upgrading from v1.0.
+  Features v2.1 (Phase 3): hour_of_day → hour_sin + hour_cos;
+  day_of_week → dow_sin + dow_cos. Cyclical encoding preserves temporal
+  adjacency (hour 23 ≈ hour 0 in feature space). All other features unchanged.
+  Retrain required. Fallback to v2.0 checkpoint if new model doesn't improve.
   Do not change feature names without: (1) updating this file, (2) appending to
   session_log.md, (3) retraining from scratch.

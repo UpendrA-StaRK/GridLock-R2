@@ -21,5 +21,23 @@ data/outputs/
 # Trained ML Model Checkpoints
 checkpoints/
 
+# Always include docs/ (slider HTML is the demo artifact)
 !docs/
 !docs/**
+
+# ── Session / run artifacts (auto-generated, not project code) ──────────────
+progress/
+artifacts/pipeline_run_log*.txt
+
+# Stray scratch files in project root
+.txt
+*.log
+
+# ── One-off diagnostic and patch scripts (already applied, no future use) ────
+scripts/diag_*.py
+scripts/patch_*.py
+scripts/update_shap_gate3.py
+
+# Windows junk
+Thumbs.db
+Desktop.ini

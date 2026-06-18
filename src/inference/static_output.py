@@ -250,6 +250,28 @@ def _build_scorecard_html(
             f"</div>"
         )
 
+    # PAI block — Phase 3 addition (backward-compatible: absent if not in eval_metrics)
+    pai_data = eval_metrics.get("spatial_pai", {})
+    pai_block = ""
+    if pai_data and pai_data.get("pai", 0.0) > 0:
+        pai        = pai_data.get("pai", 0.0)
+        hit_rate   = pai_data.get("hit_rate", 0.0)
+        area_frac  = pai_data.get("area_fraction", 0.0)
+        pai_colour = "#27ae60" if pai >= 2.0 else ("#e67e22" if pai >= 1.0 else "#e74c3c")
+        # Cap bar at PAI=10 for display purposes
+        pai_block = f"""
+      <div class='score-block' style='grid-column: 1 / -1; border-left: 4px solid {pai_colour};'>
+        <div class='score-label'>PAI — Spatial Accuracy Index (police standard metric)</div>
+        <div class='score-value' style='color:{pai_colour}'>{pai:.2f}×</div>
+        {_bar(min(pai / 10.0, 1.0), colour=pai_colour)}
+        <div class='score-sub'>
+          Top-{pai_data.get('k', 10)} zones cover <b>{area_frac*100:.1f}%</b> of all zones
+          but capture <b>{hit_rate*100:.1f}%</b> of test violations
+          &nbsp;→&nbsp; <b>{pai:.2f}× better than random patrolling</b>
+          &nbsp;(PAI&nbsp;&gt;&nbsp;1.0&nbsp;=&nbsp;better than random;&nbsp;PAI&nbsp;&gt;&nbsp;2.0&nbsp;=&nbsp;strong)
+        </div>
+      </div>"""
+
     return f"""
     <div class='scorecard-grid'>
       <div class='score-block'>
@@ -290,6 +312,7 @@ def _build_scorecard_html(
         <div class='score-value'>{rounds if rounds else 'N/A'}</div>
         <div class='score-sub'>Early-stop @ 20 patience</div>
       </div>
+      {pai_block}
     </div>"""
 
 

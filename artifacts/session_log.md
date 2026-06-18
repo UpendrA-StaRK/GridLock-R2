@@ -334,3 +334,5 @@ All models achieved perfect NDCG@10 and Precision@10. This is explained by:
 **Status:** ✅ COMPLETE
 
 **Next step:** Build Streamlit dashboard (`src/dashboard/app.py`) — the interactive demo UI
+[2026-06-18] [Antigravity Gemini 2.5 Pro] [STEP: Phase 3 Improvements] 6 improvements implemented. C2+D1: demo_script.md updated with real eval numbers (MAE=4.58, NDCG=0.890 vs 0.873), ASTraM-CIS narrative, PAI Q&A. B1: prediction_accuracy_index() added to metrics.py. C1: PAI block in static_output.py scorecard HTML. B2: cis_score_norm column added to clustering.py. B3: Cyclical encoding (hour_sin/cos, dow_sin/cos) in features.yaml v2.1, train.py, ranker.py. Retrain required for B3. All changes verified by import checks.
+[2026-06-18] [Antigravity Gemini 2.5 Pro] [STEP: Retrain B3 Result] Cyclical encoding retrain SUCCEEDED. MAE 4.5768->4.4822 (-0.0946), NDCG 0.8904->0.8911 (+0.0007), Spearman 0.5148->0.5216 (+0.0068). All 3 improved. features.yaml v2.1 KEPT. New checkpoint is primary.

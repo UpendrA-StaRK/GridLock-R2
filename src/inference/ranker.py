@@ -254,12 +254,13 @@ def _get_feature_cols(time_resolution: str, zone_grid_df: pd.DataFrame) -> list[
 
     Phase 1 update: Uses zone aggregate features instead of raw zone_id/police_station_id/
     center_code_encoded. Must match train.py _get_feature_cols() exactly.
+    Phase 3 update (v2.1): hour_of_day → hour_sin + hour_cos; day_of_week → dow_sin + dow_cos.
     """
     candidates = []
-    # Temporal
+    # Temporal (cyclical encoding — Phase 3 / v2.1)
     if time_resolution == "hour":
-        candidates.append("hour_of_day")
-    candidates += ["day_of_week", "is_weekend", "month"]
+        candidates += ["hour_sin", "hour_cos"]
+    candidates += ["dow_sin", "dow_cos", "is_weekend", "month"]
 
     # Zone aggregate features (Phase 1 — replaces zone_id lookup table pattern)
     candidates += [
@@ -326,9 +327,15 @@ def _build_zone_scaffold(
     scaffold = zone_stats_df.copy()
 
     # Add time-block-level median features from the grid (fraction_at_junction,
-    # rolling_7d_count, dominant_violation_type, etc.) — use overall zone medians
-    temporal_skip = {"hour_of_day", "is_weekend", "month", "day_of_week",
-                     "zone_id", "zone_hour_violation_count", "zone_day_violation_count", "date"}
+    # rolling_7d_count, dominant_violation_type, etc.) — use overall zone medians.
+    # Exclude all temporal columns: they must come from the request parameters, not
+    # historical medians (especially cyclical sin/cos must be computed from the
+    # requested hour/day, not averaged — averaging circular values is undefined).
+    temporal_skip = {
+        "hour_of_day", "is_weekend", "month", "day_of_week",
+        "hour_sin", "hour_cos", "dow_sin", "dow_cos",
+        "zone_id", "zone_hour_violation_count", "zone_day_violation_count", "date",
+    }
     agg_dict: dict[str, str] = {
         col: "median"
         for col in zone_grid_df.columns
@@ -342,13 +349,25 @@ def _build_zone_scaffold(
         )
         scaffold = scaffold.merge(grid_medians, on="zone_id", how="left")
 
-    # Override temporal features with the requested values
-    if time_resolution == "hour" and target_hour is not None:
-        scaffold["hour_of_day"] = int(target_hour)
-
-    scaffold["is_weekend"]  = int(target_date.dayofweek >= 5)
-    scaffold["day_of_week"] = int(target_date.dayofweek)
+    # Override temporal features with the requested values.
+    # Phase 3 (v2.1): compute cyclical sin/cos from the requested date/hour.
+    # Raw hour_of_day and day_of_week are kept as intermediate values only.
+    dow = int(target_date.dayofweek)
+    scaffold["is_weekend"]  = int(dow >= 5)
+    scaffold["day_of_week"] = dow
     scaffold["month"]       = int(target_date.month)
+
+    scaffold["dow_sin"] = float(np.sin(2 * np.pi * dow / 7.0))
+    scaffold["dow_cos"] = float(np.cos(2 * np.pi * dow / 7.0))
+
+    if time_resolution == "hour" and target_hour is not None:
+        h = int(target_hour)
+        scaffold["hour_of_day"] = h
+        scaffold["hour_sin"] = float(np.sin(2 * np.pi * h / 24.0))
+        scaffold["hour_cos"] = float(np.cos(2 * np.pi * h / 24.0))
+    else:
+        scaffold["hour_sin"] = 0.0
+        scaffold["hour_cos"] = 1.0  # default midnight
 
     # Ensure all model feature_cols are present; fill any missing with 0
     for col in feature_cols:

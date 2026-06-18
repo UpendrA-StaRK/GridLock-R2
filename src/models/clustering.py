@@ -390,11 +390,24 @@ def compute_cis(
         labels=["LOW", "MEDIUM", "HIGH"],
     )
 
+    # Phase 3 addition: cis_score_norm — 0-1 normalized CIS score.
+    # Additive column only. cis_score (raw) is preserved unchanged.
+    # cis_score_norm = cis_score / max(cis_score) across all zones.
+    # Useful for interpretable display: "Zone X has CIS of 0.82 (82% of max impact)".
+    # Rankings are identical to raw cis_score — normalization is a monotone transform.
+    zone_counts["cis_score_norm"] = (
+        (zone_counts["cis_score"] / max_cis).clip(0.0, 1.0).round(6)
+        if max_cis > 0
+        else 0.0
+    )
+
     logger.info(
         f"✓ CIS complete: "
         f"HIGH={( zone_counts['priority_tier'] == 'HIGH').sum()} zones | "
         f"MEDIUM={(zone_counts['priority_tier'] == 'MEDIUM').sum()} zones | "
-        f"LOW={(  zone_counts['priority_tier'] == 'LOW').sum()} zones"
+        f"LOW={(  zone_counts['priority_tier'] == 'LOW').sum()} zones | "
+        f"cis_score_norm range [{zone_counts['cis_score_norm'].min():.4f}, "
+        f"{zone_counts['cis_score_norm'].max():.4f}]"
     )
     return zone_counts
 

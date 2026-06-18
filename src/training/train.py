@@ -79,12 +79,12 @@ def _get_feature_cols(features_cfg: dict[str, Any], time_resolution: str) -> lis
     Build ordered feature column list from configs/features.yaml.
 
     Phase 1 (v2.0): zone_id, police_station_id, center_code_encoded are REMOVED.
-    Replaced by zone_aggregate features (zone_mean_count, zone_median_count,
-    zone_cis_score, zone_junction_frac, zone_total_count) which capture zone
-    characteristics without ordinal identity assumptions.
+    Phase 3 (v2.1): hour_of_day → hour_sin + hour_cos; day_of_week → dow_sin + dow_cos.
+    Cyclical encoding prevents the "midnight paradox" where hour 23 and hour 0
+    appear numerically far apart to tree-based models.
 
     For zone-grid training we use:
-      temporal:    hour_of_day (only for 'hour'), day_of_week, is_weekend, month
+      temporal:    hour_sin + hour_cos (only for 'hour'), dow_sin + dow_cos, is_weekend, month
       zone_aggs:   zone_mean_count, zone_median_count, zone_cis_score,
                    zone_junction_frac, zone_total_count
       spatial:     fraction_at_junction (time-block-level junction fraction)
@@ -95,10 +95,11 @@ def _get_feature_cols(features_cfg: dict[str, Any], time_resolution: str) -> lis
     """
     cols: list[str] = []
 
-    # Temporal — hour_of_day only relevant for hour resolution
+    # Temporal — cyclical encoding (Phase 3 / v2.1)
+    # hour_sin / hour_cos only relevant for hour resolution
     if time_resolution == "hour":
-        cols.append("hour_of_day")
-    cols += ["day_of_week", "is_weekend", "month"]
+        cols += ["hour_sin", "hour_cos"]
+    cols += ["dow_sin", "dow_cos", "is_weekend", "month"]
 
     # Zone aggregate features (Phase 1 — replaces zone_id lookup table pattern)
     cols += [
@@ -127,6 +128,44 @@ def _get_feature_cols(features_cfg: dict[str, Any], time_resolution: str) -> lis
     cols.append("data_sent_to_scita_mean")
 
     return cols
+
+
+def _add_cyclical_temporal_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Add cyclical sin/cos encoding for hour_of_day and day_of_week.
+
+    Phase 3 (v2.1): Replaces raw integer features with 2D circular representations
+    so that hour 23 ≈ hour 0 in feature space ("midnight paradox" fix).
+
+    Formula:
+        hour_sin = sin(2π × hour_of_day / 24)
+        hour_cos = cos(2π × hour_of_day / 24)
+        dow_sin  = sin(2π × day_of_week / 7)
+        dow_cos  = cos(2π × day_of_week / 7)
+
+    Args:
+        df: DataFrame that already has hour_of_day and day_of_week columns.
+
+    Returns:
+        df with four new columns added (in-place safe — returns df).
+    """
+    import numpy as np
+
+    if "hour_of_day" in df.columns:
+        df["hour_sin"] = np.sin(2 * np.pi * df["hour_of_day"] / 24.0).round(8)
+        df["hour_cos"] = np.cos(2 * np.pi * df["hour_of_day"] / 24.0).round(8)
+    else:
+        df["hour_sin"] = 0.0
+        df["hour_cos"] = 1.0  # cos(0) = 1.0 (default to midnight)
+
+    if "day_of_week" in df.columns:
+        df["dow_sin"] = np.sin(2 * np.pi * df["day_of_week"] / 7.0).round(8)
+        df["dow_cos"] = np.cos(2 * np.pi * df["day_of_week"] / 7.0).round(8)
+    else:
+        df["dow_sin"] = 0.0
+        df["dow_cos"] = 1.0  # default to Monday
+
+    return df
 
 
 def _get_target_col(time_resolution: str) -> str:
@@ -560,6 +599,14 @@ def run_training(
         train_df, test_df = _add_zone_aggregate_features(
             train_df, test_df, target_col, cis_df
         )
+
+        # Phase 3 (v2.1): Add cyclical temporal features (hour_sin, hour_cos,
+        # dow_sin, dow_cos). Must be added after the split so that the raw
+        # hour_of_day / day_of_week columns in the parquet are still usable.
+        # The raw integer columns (hour_of_day, day_of_week) remain in the
+        # DataFrame but are excluded from feature_cols going forward.
+        train_df = _add_cyclical_temporal_features(train_df)
+        test_df  = _add_cyclical_temporal_features(test_df)
 
         # Build feature matrices — only keep cols present in the loaded dataframe
         available_feature_cols = [c for c in feature_cols if c in train_df.columns]
