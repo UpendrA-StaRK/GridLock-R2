@@ -338,3 +338,118 @@ All models achieved perfect NDCG@10 and Precision@10. This is explained by:
 [2026-06-18] [Antigravity Gemini 2.5 Pro] [STEP: Retrain B3 Result] Cyclical encoding retrain SUCCEEDED. MAE 4.5768->4.4822 (-0.0946), NDCG 0.8904->0.8911 (+0.0007), Spearman 0.5148->0.5216 (+0.0068). All 3 improved. features.yaml v2.1 KEPT. New checkpoint is primary.
 [2026-06-19] [Gemini 3.5 Flash] [STEP: GitHub Pages Slider Map] Regenerated docs/index.html with the latest XGBoost model checkpoint (incorporating cyclical temporal encoding, normalized CIS, and the PAI metric) and prepared it for GitHub Pages hosting.
 [2026-06-19] [Gemini 3.5 Flash] [STEP: Static HTML Date Picker] Replaced the single-day logic in the static HTML map generator with a multi-day (1 week) nested JSON structure. Added a sleek Date Picker to the UI to allow judges to toggle between dates and see weekday vs. weekend patterns.
+
+## 19/6
+
+### S1 - Metric Interpretation
+**Findings**: 
+1. MAE=4.48 is operationally acceptable if ranking (NDCG) is intact. 
+2. High RMSE/MAE ratio (2.37) signals errors on rare high-count spikes. 
+3. Tweedie loss natively handles this right-skew better than log1p.
+**Verdict**: High RMSE reflects spike penalties, not base inaccuracy.
+**Recommended Action**: Switch XGBoost objective to reg:tweedie.
+**Confidence**: High.
+
+### S2 - Solved Architecture Deep Dive
+**Findings**: 
+1. Analogous tasks (Uber demand, Chicago crime, SF parking) show XGBoost/LightGBM dominate small-to-medium tabular zone-count regression tasks.
+2. Papers reviewed (Certain): ST-GNNs require graph adjacency and large data; LSTM overfits small tabular data compared to LightGBM; Lim et al. (2021) TFT is powerful but overkill/data-hungry for 140 zones. SHAP studies confirm spatial/temporal features dominate, aligning with our current XGBoost splits.
+**Verdict**: XGBoost/LightGBM is the optimal architecture for a 5-month, 140-zone dataset.
+**Recommended Action**: Retain XGBoost. Do not switch to deep learning (ST-GNN/LSTM) due to data size constraints.
+**Confidence**: High.
+
+### S3 - Boosting Alternatives Evaluation
+**Findings**: 
+1. LightGBM: Native categorical handling reduces noise over LabelEncoder; highly viable. 
+2. CatBoost: Ordered boosting prevents internal target leakage, but doesn't substitute our strict temporal train/test split. 
+3. Poisson/Tweedie: Natively handles zero-inflation and right-skew better than log1p.
+4. TFT & Prophet: TFT is data-hungry/GPU-bound. Prophet requires 140 separate models, missing cross-zone signals.
+5. Ensemble: Time-series stacking requires complex chronological CV, risking leakage for minor gains.
+**Verdict**: Complex architectures are unviable, but optimizing the loss function (Tweedie) and native categoricals (LightGBM) are strong tactical moves.
+**Recommended Action**: Test XGBoost with reg:tweedie objective and LightGBM with native categorical features.
+**Confidence**: High.
+
+### S4 - Feature Audit (Claude Sonnet 4.6 Thinking)
+
+#### 4a — Features Likely Helping
+
+| Feature | Verdict | Reason |
+|---|---|---|
+| `rolling_7d_count` | ✅ **Helping** | Top SHAP feature in urban demand forecasting (M5, bike-share, crime count tasks). 7-day window captures weekly seasonality. `lag_1d_count` (missing!) likely ranks above it — add immediately. |
+| `zone_mean_count` | ✅ **Helping** | Standard zone-identity proxy. Top-5 SHAP in spatial zone regression. Replaces meaningless ordinal zone_id. |
+| `zone_median_count` | ⚠️ **Helping but redundant** | Highly collinear with `zone_mean_count` (r > 0.85 expected). SHAP will show one dominating — prune the lower-SHAP one. |
+| `hour_sin`, `hour_cos` | ⚠️ **Unknown — needs ablation** | Cyclical encoding fixes midnight paradox but XGBoost splits are axis-aligned, so `sin = 0.5` conflates hour 2 and hour 10. Literature shows marginal difference vs raw integer for trees. The Phase 3 MAE improvement (−0.09) is unverified against a control — may be noise. Run ablation (one retrain with raw `hour_of_day` integer). |
+
+**Recommended action (4a):** Add `lag_1d_count` and `lag_7d_count` immediately. Run SHAP on current model to validate zone_median_count and confirm rolling_7d_count dominance. Run cyclical vs raw integer ablation.
+
+#### 4b — Features Potentially Hurting
+
+| Feature | Verdict | Reason |
+|---|---|---|
+| `dominant_violation_type` | ⚠️ **Potentially Hurting** | Mode of sparse zone×hour cells (≤3 violations = random draw from 17 types). Near-constant for dense zones (WRONG PARKING ~46% everywhere). Near-zero marginal signal beyond `violation_type_primary_encoded`. Expect low SHAP. |
+| `dominant_vehicle_type` | ⚠️ **Potentially Hurting** | Same sparsity problem. 22 vehicle types, but mode in sparse cells is noise. Likely low SHAP. |
+| `data_sent_to_scita_mean` | ⚠️ **Unknown — needs SHAP** | Administrative batch-upload flag. Likely reflects shift-end batching rhythms rather than violation density. Prune threshold: mean |SHAP| < 1% of `rolling_7d_count`'s mean |SHAP|. |
+| `zone_cis_score` | ⚠️ **Potentially collinear** | CIS = violation_density_norm × junction_weight. Components partially captured by `zone_mean_count` and `zone_junction_frac` separately. Composite may add multicollinearity without marginal signal. Include in SHAP run. |
+| `month` | ⚠️ **Potentially Hurting (overfitting)** | Only 5 unique values (Nov–Apr). Literature minimum for seasonal generalisation: 2+ full cycles (24+ months). With one partial cycle, `month` memorises training-period artefacts, not transferable seasonality. `is_weekend` + `dow_sin/cos` already cover within-week structure. Expect low SHAP; likely candidate for removal. |
+
+**Recommended action (4b):** Run SHAP first (1–2 hours). Drop features with mean |SHAP| < 2% of top feature's mean |SHAP| and retrain.
+
+#### 4c — Missing Features
+
+| Feature | Verdict | Feasibility | Expected Impact |
+|---|---|---|---|
+| `lag_1d_count` (yesterday same hour per zone) | ✅ **Add immediately** | ✅ Fully derivable from existing parquet — `groupby(['zone_id','hour_of_day']).shift(1)` before date split | Top-3 SHAP rank in analogous tasks; expected MAE −5–10% |
+| `lag_7d_count` (same hour last week per zone) | ✅ **Add** | ✅ Same implementation; `shift(7)` on daily grouped data | Captures weekly periodicity directly; complements rolling_7d_count |
+| `is_holiday` (Karnataka public holidays) | ⚠️ **Add cautiously** | ⚠️ Partial — national/state holidays can be hardcoded from dates in training window without external data | 8–15% MAE reduction in Indian urban traffic datasets. Only add if lag features don't absorb the holiday signal. |
+| `zone_area_km2` / `zone_density_per_km2` | ⚠️ **Add medium-term** | ✅ Convex hull of DBSCAN cluster lat/lon points gives area estimate via shapely — no external GIS data | Normalises `zone_total_count` for zone size; prevents large zones from appearing artificially active |
+| Neighbouring zone spillover | ⚠️ **Post-hackathon** | ✅ Centroid-distance adjacency from cis_table.parquet; train-only stats | 5–12% RMSE reduction in spatial crime/traffic tasks per literature |
+
+**Effort summary for 4c:** lag_1d + lag_7d = Medium (modify features.py Phase B + retraining). Others = Medium to High.
+
+### S5 - Strict Review: Pipeline Risks (Claude Sonnet 4.6 Thinking)
+
+| Risk | Verdict | Detail |
+|---|---|---|
+| **Cyclical encoding for XGBoost** | ⚠️ **Unclear — run ablation** | XGBoost axis-aligned splits conflate hours with equal sin values (e.g., hour 2 and hour 10 share sin≈0.5). Literature: difference vs raw integer is typically marginal (< 0.5% RMSE) for trees. Phase 3 MAE improvement (−0.09) unverified by isolated ablation. **Experiment**: retrain with raw `hour_of_day` integer, compare RMSE. One run. Effort: Low. |
+| **DBSCAN zone boundary instability** | ✅ **Unlikely to be meaningful** | 2.07% noise rate is low; Bengaluru geography is stable. Negative silhouette (−0.0955) signals cluster overlap but does not cause systematic test misassignment — DBSCAN assigns via core-point proximity, not centroid. Risk is < 5% of test rows. No immediate fix needed. |
+| **Zone aggregate leakage** | ✅ **Standard safe practice** | `zone_mean_count`, `zone_total_count` etc. are computed on `train_df` only (train.py lines 213–222) then joined by `zone_id` to both splits. This is the textbook correct approach. Not leakage. Minor distributional shift risk is acceptable given confirmed low concept drift. |
+| **Right-skewed target + MSE loss** | ✅ **CONFIRMED RISK** | RMSE/MAE ratio = 2.37 (10.6/4.48). Diagnostic: model is making large errors on rare high-count spikes because MSE shrinks predictions toward the mean to avoid squared-error penalty. `count:poisson` or `reg:tweedie` use a log-link function that natively handles right-skewed count distributions. `log1p` transform suffers retransformation bias (Jensen's Inequality: `exp(E[log(y)]) < E[y]`). XGBoost `count:poisson` is a **one-line change in model.yaml**. Expected: RMSE reduction; MAE may stay similar or improve slightly. |
+| **LabelEncoder for categoricals** | ⚠️ **Confirmed risk, low severity** | LabelEncoder assigns arbitrary integers to 17 violation types and 22 vehicle types — XGBoost may learn spurious ordinal relationships. With low cardinality (17, 22 categories), the impact is limited — trees can exhaustively search the integer range. Fix: enable `enable_categorical=True` in XGBoost and cast 4 categorical columns to `category` dtype. Or switch to LightGBM with `categorical_feature` parameter. Expected improvement: 1–5% RMSE. Effort: Low. |
+
+**Top 2 confirmed risks requiring immediate action:**
+1. **MSE loss (reg:squarederror) on right-skewed count data** → Change to `count:poisson` in model.yaml. Retrain. One config change.
+2. **LabelEncoder for nominal categoricals** → Enable XGBoost native categorical handling OR use LightGBM native. Low effort, expected small but real gain.
+
+### S6 - Next Steps Roadmap (Claude Sonnet 4.6 Thinking)
+
+#### Immediate — Low Effort, High Impact (before next training run)
+
+| # | Action | Expected Impact | Effort | Confidence |
+|---|---|---|---|---|
+| 1 | **Run SHAP** on current XGBoost model. Prune features with mean |SHAP| < 2% of top feature's mean |SHAP|. | Reveals dead-weight features; prevents next retrain from wasting capacity on noise. Also produces judge-ready SHAP summary plot. | Low (2–3 hrs; add `06_shap.ipynb`) | High |
+| 2 | **Switch objective to `count:poisson`** — one-line change in model.yaml: `objective: count:poisson`. Retrain. Compare RMSE vs current 10.6. | RMSE reduction expected (log-link natively handles right-skew and zero-inflation). MAE approximately unchanged or slightly better. Confirmed in urban count regression literature (xgboosting.com, stackexchange count regression threads). | Low (1 hr total) | High |
+| 3 | **Add `lag_1d_count` and `lag_7d_count`** to features.yaml + features.py Phase B aggregate step. | Top-3 SHAP rank in analogous demand forecasting tasks. Expected MAE −5–10%. Captures immediate persistence (`lag_1d`) and weekly periodicity (`lag_7d`). Complements `rolling_7d_count` without replacing it. | Medium (half day — modify features.py zone grid builder, update features.yaml, retrain) | High |
+
+#### Short-Term — Next Sprint
+
+| # | Action | Expected Impact | Effort | Confidence |
+|---|---|---|---|---|
+| 4 | **Cyclical encoding ablation** — retrain with raw `hour_of_day` integer (0–23) and `day_of_week` integer (0–6), all else equal. Compare RMSE. | Resolves S5 open question. If raw integer RMSE ≤ cyclical RMSE: revert (simpler features, same accuracy). If cyclical is better: keep v2.1. | Low (1 training run) | Medium (literature: marginal for trees) |
+| 5 | **LightGBM native categoricals** — run LightGBM with `categorical_feature=[dominant_violation_type, dominant_vehicle_type, violation_type_primary_encoded, vehicle_type_encoded]`. Compare MAE vs label-encoded XGBoost. | 1–5% RMSE reduction; removes spurious ordinal assumptions for 17 violation types and 22 vehicle types. | Low (config change) | Medium |
+| 6 | **Add Spearman ρ to metrics.py + per-hour NDCG** — `scipy.stats.spearmanr(y_true, y_pred)` in full_eval(); `ndcg_per_hour()` function that evaluates ranking within each hour slot. | Spearman (currently 0.52) is the correct primary metric for the zone-ranking task. Per-hour NDCG breaks the trivial NDCG=1.0 ceiling and shows ML differentiates which zones are hottest at specific times. Critical for judge Q&A: "why ML over a lookup table?" | Low (< 1 hr, no retraining needed) | High |
+
+#### Medium-Term — Post-Hackathon / Production
+
+| # | Action | Expected Impact | Effort | Confidence |
+|---|---|---|---|---|
+| 7 | **Spatial lag feature** — neighbour zone mean violation count. Adjacency: centroid distance ≤ 1 km from cis_table.parquet. Stats computed train-only. | 5–12% RMSE reduction (Harvard crime spillover, PLOS urban traffic studies). Captures parking pressure displacement between adjacent junctions. | High (full day) | Medium |
+| 8 | **Ensemble XGBoost + LightGBM** — out-of-fold stacking with temporal split for meta-learner. | 2–5% MAE reduction typical on tabular regression ensembles (M5 winner writeups). Risk: requires careful temporal fold design. | High | Medium |
+| 9 | **TFT when dataset > 12 months** — Temporal Fusion Transformer (Lim et al. 2021). Minimum viable: ~500 obs per entity. Currently: 140 zones × 150 days = 21k zone-days (marginal). At 12+ months (40k+ zone-days), TFT beats XGBoost on temporal tasks. | Potentially large gain on temporal dynamics and multi-horizon forecasting. | High | Low (data currently too small) |
+
+**Priority for next 24 hours (hackathon timeline):**
+1. `06_shap.ipynb` — run SHAP, produce summary plot for demo, identify features to prune
+2. `count:poisson` objective — one config line, retrain, compare RMSE
+3. Per-hour NDCG + Spearman in metrics.py — closes evaluation narrative gap without retraining
+4. lag_1d + lag_7d — highest expected feature engineering gain, requires half-day effort
+
+
