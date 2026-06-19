@@ -380,3 +380,4 @@ Append a one-line mirror here after every step:
 [2026-06-18] [Antigravity Gemini 2.5 Pro] [STEP: Phase 3 Improvements] Implemented 6 improvements: cyclical temporal encoding, PAI metrics, CIS normalization, ASTraM blackspot narrative, and scorecard HTML updates.
 [2026-06-18] [Antigravity Gemini 2.5 Pro] [STEP: Retrain B3 Result] Cyclical encoding retrain SUCCEEDED. MAE improved to 4.4822, NDCG to 0.8911, Spearman to 0.5216.
 [2026-06-19] [Gemini 3.5 Flash] [STEP: GitHub Pages Slider Map] Regenerated docs/index.html with the latest XGBoost model checkpoint (incorporating cyclical temporal encoding, normalized CIS, and the PAI metric) and prepared it for GitHub Pages hosting.
+[2026-06-19] [Gemini 3.5 Flash] [STEP: Static HTML Date Picker] Replaced the single-day logic in the static HTML map generator with a multi-day (1 week) nested JSON structure. Added a sleek Date Picker to the UI to allow judges to toggle between dates and see weekday vs. weekend patterns.

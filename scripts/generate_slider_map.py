@@ -31,13 +31,15 @@ def main():
     except Exception as exc:
         logger.warning(f"Could not load eval_metrics: {exc}")
         
-    target_date = "2024-03-18"
-    logger.info(f"Ranking zones for all 24 hours of {target_date}...")
+    target_dates = [(pd.Timestamp("2024-03-18") + pd.Timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)]
+    logger.info(f"Ranking zones for 24 hours across {len(target_dates)} days...")
     
-    all_hours_data = {}
-    for hour in range(24):
-        hour_df = rank_zones(ranker, target_date=target_date, target_hour=hour, top_k=10)
-        all_hours_data[hour] = hour_df
+    all_dates_hours_data = {}
+    for date_str in target_dates:
+        all_dates_hours_data[date_str] = {}
+        for hour in range(24):
+            hour_df = rank_zones(ranker, target_date=date_str, target_hour=hour, top_k=10)
+            all_dates_hours_data[date_str][hour] = hour_df
         
     logger.info("Computing centroids...")
     centroids_df = build_zone_centroids(
@@ -47,9 +49,9 @@ def main():
     output_path = PROJECT_ROOT / "docs" / "index.html"
     logger.info(f"Generating time-slider output to {output_path}...")
     generate_static_output_with_slider(
-        all_hours_data  = all_hours_data,
+        all_dates_hours_data = all_dates_hours_data,
         centroids_df    = centroids_df,
-        target_date     = target_date,
+        target_dates    = target_dates,
         output_path     = output_path,
         model_name      = ranker["model_name"],
         time_resolution = ranker["time_resolution"],

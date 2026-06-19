@@ -506,9 +506,9 @@ def generate_static_output(
 # ── Time-slider output generator (Phase 5) ────────────────────────────────────
 
 def generate_static_output_with_slider(
-    all_hours_data: dict[int, pd.DataFrame],
+    all_dates_hours_data: dict[str, dict[int, pd.DataFrame]],
     centroids_df: pd.DataFrame,
-    target_date: str,
+    target_dates: list[str],
     output_path: str | Path,
     model_name: str = "xgboost",
     time_resolution: str = "hour",
@@ -525,10 +525,9 @@ def generate_static_output_with_slider(
     frequency table.
 
     Args:
-        all_hours_data: Dict mapping hour (0–23) → rank_zones() DataFrame.
-                        Build by calling rank_zones() for each hour.
+        all_dates_hours_data: Nested Dict: date_str -> hour (0-23) -> rank_zones() DataFrame.
         centroids_df:   Zone centroids from build_zone_centroids().
-        target_date:    Date string (e.g. "2024-03-15").
+        target_dates:   List of date strings (e.g. ["2024-03-18", "2024-03-19"]).
         output_path:    Where to save the HTML file.
         model_name:     Model used (for header display).
         time_resolution: Resolution (for header display).
@@ -552,31 +551,33 @@ def generate_static_output_with_slider(
             "lon": float(row["lon_centroid"]),
         }
 
-    # Build JS-embeddable data structure: hour → list of zone records
-    hours_json_data: dict[str, list[dict]] = {}
-    for hour in range(24):
-        df = all_hours_data.get(hour)
-        if df is None or len(df) == 0:
-            hours_json_data[str(hour)] = []
-            continue
-        records = []
-        for _, row in df.reset_index().iterrows():
-            zone_id = int(row["zone_id"])
-            centroid = centroid_lookup.get(zone_id, {})
-            records.append({
-                "zone_id":        zone_id,
-                "rank":           int(row.get("rank", 0)),
-                "priority_score": float(row.get("priority_score", 0)),
-                "predicted_count": float(row.get("predicted_count", 0)),
-                "cis_score":      float(row.get("cis_score", 0)),
-                "priority_tier":  str(row.get("priority_tier", "LOW")),
-                "has_junction":   bool(row.get("has_junction", False)),
-                "lat":            centroid.get("lat", 0),
-                "lon":            centroid.get("lon", 0),
-            })
-        hours_json_data[str(hour)] = records
+    # Build JS-embeddable data structure: date -> hour -> list of zone records
+    dates_json_data: dict[str, dict[str, list[dict]]] = {}
+    for date_str, hours_dict in all_dates_hours_data.items():
+        dates_json_data[date_str] = {}
+        for hour in range(24):
+            df = hours_dict.get(hour)
+            if df is None or len(df) == 0:
+                dates_json_data[date_str][str(hour)] = []
+                continue
+            records = []
+            for _, row in df.reset_index().iterrows():
+                zone_id = int(row["zone_id"])
+                centroid = centroid_lookup.get(zone_id, {})
+                records.append({
+                    "zone_id":        zone_id,
+                    "rank":           int(row.get("rank", 0)),
+                    "priority_score": float(row.get("priority_score", 0)),
+                    "predicted_count": float(row.get("predicted_count", 0)),
+                    "cis_score":      float(row.get("cis_score", 0)),
+                    "priority_tier":  str(row.get("priority_tier", "LOW")),
+                    "has_junction":   bool(row.get("has_junction", False)),
+                    "lat":            centroid.get("lat", 0),
+                    "lon":            centroid.get("lon", 0),
+                })
+            dates_json_data[date_str][str(hour)] = records
 
-    hours_json_str = _json.dumps(hours_json_data)
+    data_json_str = _json.dumps(dates_json_data)
 
     # Build scorecard (reuse existing helper)
     scorecard_html = _build_scorecard_html(eval_metrics, model_name, time_resolution)
@@ -586,7 +587,7 @@ def generate_static_output_with_slider(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GridLock R2 — Enforcement Priority | {target_date} | Time Slider</title>
+  <title>GridLock R2 — Enforcement Priority | {target_dates[0]} | Time Slider</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
@@ -662,7 +663,7 @@ def generate_static_output_with_slider(
 <header>
   <div>
     <h1>🚨 GridLock R2 — Enforcement Priority Map (24h)</h1>
-    <p>PS1: Parking-Induced Congestion | Bengaluru Traffic Police | {target_date}</p>
+    <p>PS1: Parking-Induced Congestion | Bengaluru Traffic Police | <span id="header-date">{target_dates[0]}</span></p>
   </div>
   <div style="text-align:right">
     <div class="badge">DEMO — TIME SLIDER</div>
@@ -672,7 +673,12 @@ def generate_static_output_with_slider(
 
 <!-- ── Time slider ── -->
 <div class="slider-bar">
-  <span class="slider-label">⏱ Hour of Day:</span>
+  <span class="slider-label">📅 Date:</span>
+  <select id="date-select" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 13px; outline: none; cursor: pointer; color: #2c3e50; font-weight: 600;">
+    {''.join(f'<option value="{d}">{d}</option>' for d in target_dates)}
+  </select>
+
+  <span class="slider-label" style="margin-left: 16px;">⏱ Hour of Day:</span>
   <input type="range" id="hour-slider" min="0" max="23" value="9" step="1">
   <div id="hour-display">09:00</div>
   <div class="time-icons">
@@ -719,8 +725,11 @@ def generate_static_output_with_slider(
 </footer>
 
 <script>
-// ── All hours data (embedded at build time) ──────────────────────────────────
-const ALL_HOURS = {hours_json_str};
+// ── All dates/hours data (embedded at build time) ─────────────────────────────
+const ALL_DATA = {data_json_str};
+
+let currentDate = "{target_dates[0]}";
+let currentHour = 9;
 
 // ── Leaflet map setup ─────────────────────────────────────────────────────────
 const BENG_LAT = 12.9716, BENG_LON = 77.5946;
@@ -737,8 +746,8 @@ function tierColor(tier) {{
   return '#27ae60';
 }}
 
-function updateDisplay(hour) {{
-  const zones = ALL_HOURS[String(hour)] || [];
+function updateDisplay() {{
+  const zones = (ALL_DATA[currentDate] && ALL_DATA[currentDate][String(currentHour)]) || [];
 
   // Clear existing markers
   markers.forEach(m => map.removeLayer(m));
@@ -799,22 +808,35 @@ function updateDisplay(hour) {{
   }});
 
   // Update labels
-  const label = String(hour).padStart(2, '0') + ':00';
-  document.getElementById('hour-display').textContent = label;
-  document.getElementById('table-hour-label').textContent = `Hour ${{label}}`;
+  const hourLabel = String(currentHour).padStart(2, '0') + ':00';
+  document.getElementById('hour-display').textContent = hourLabel;
+  document.getElementById('table-hour-label').textContent = `Hour ${{hourLabel}}`;
+  document.getElementById('header-date').textContent = currentDate;
 }}
 
-// ── Slider event ─────────────────────────────────────────────────────────────
+// ── Event Listeners ──────────────────────────────────────────────────────────
 const slider = document.getElementById('hour-slider');
-slider.addEventListener('input', () => updateDisplay(parseInt(slider.value)));
+slider.addEventListener('input', () => {{
+  currentHour = parseInt(slider.value);
+  updateDisplay();
+}});
+
+const dateSelect = document.getElementById('date-select');
+if (dateSelect) {{
+  dateSelect.addEventListener('change', (e) => {{
+    currentDate = e.target.value;
+    updateDisplay();
+  }});
+}}
 
 function setHour(h) {{
   slider.value = h;
-  updateDisplay(h);
+  currentHour = h;
+  updateDisplay();
 }}
 
 // ── Initial render ────────────────────────────────────────────────────────────
-updateDisplay(9);  // Default to morning rush hour
+updateDisplay();
 </script>
 
 </body>
