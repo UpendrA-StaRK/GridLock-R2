@@ -30,8 +30,11 @@ progress/
 artifacts/pipeline_run_log*.txt
 
 # Stray scratch files in project root
-.txt
+*.txt
 *.log
+
+# Stray notebook python exports
+notebooks/*.py
 
 # ── One-off diagnostic and patch scripts (already applied, no future use) ────
 scripts/diag_*.py
