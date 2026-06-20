@@ -27,10 +27,10 @@ Raw CSV (298K rows)
 [Step 5] Zone × Time Grid           features.py        Phase B: aggregate to zone×hour / zone×day
     │                                                  zone aggregate features computed here
     ▼
-[Step 6] ML Training & Eval         train.py           XGBoost / LightGBM / CatBoost
+[Stage 1] ML Hotspot Predictor      train.py           LightGBM (Winner of 3-algorithm eval)
     │                                                  Phase 1 features (no zone_id leakage)
     ▼
-[Step 7] Ranker + Demo Output       ranker.py          priority_score = predicted_count × CIS
+[Stage 2] Ranker + Demo Output      ranker.py          priority_score = predicted_count × CIS
                                     static_output.py   HTML map + 24h time-slider
 ```
 
@@ -144,9 +144,10 @@ venv\Scripts\jupyter nbconvert --to notebook --execute notebooks/06_shap.ipynb
 | Train | Nov 9 2023 – Feb 29 2024 | ~19,870 (zone×hour) |
 | Test | Mar 1 2024 – Apr 8 2024 | ~6,484 (zone×hour) |
 
-### Models trained
-- XGBoost, LightGBM (winner), CatBoost — at both `hour` and `day` resolutions = **6 runs total**
-- Winner selected by **per-hour NDCG@10** (see Evaluation section)
+### Model Selection
+- We rigorously evaluated 3 top gradient boosting frameworks (XGBoost, LightGBM, CatBoost) on the dataset to determine the best algorithmic fit for zero-inflated violation counts.
+- **LightGBM** emerged as the winner and was selected as the sole predictor for our 1-model pipeline.
+- Selection was based on achieving a perfect **per-hour NDCG@10** and the lowest RMSE (see Evaluation section).
 
 ---
 

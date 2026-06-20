@@ -1,4 +1,4 @@
-# GridLock R2 — Full Pipeline Review
+﻿# GridLock R2 — Full Pipeline Review
 
 > **Reviewer**: Antigravity (Claude Sonnet 4.6 Thinking)  
 > **Date**: 2026-06-20  
@@ -244,7 +244,7 @@ for fold, (train_idx, val_idx) in enumerate(tscv.split(X)):
 
 #### 4.3 Early Stopping PASS
 
-All three models have early stopping configured and use `eval_set` correctly during `.fit()`. XGBoost and CatBoost automatically use best iteration at prediction. LightGBM loaded as `lgb.Booster` uses all trees by default — for best accuracy at inference:
+All evaluated models have early stopping configured and use `eval_set` correctly during `.fit()`. XGBoost and CatBoost automatically use best iteration at prediction. LightGBM loaded as `lgb.Booster` uses all trees by default — for best accuracy at inference:
 
 ```python
 # ranker.py — LightGBM best_iteration usage

@@ -40,7 +40,7 @@
 - ✅ `police_station`, `junction_name`, `center_code` — enables zone-level aggregation
 - ⚠️ `description` column: 298,450/298,450 are NULL → no free-text info
 - ⚠️ `closed_datetime`, `action_taken_timestamp`: entirely NULL → enforcement outcome cannot be measured
-- ⚠️ No actual traffic flow data (speed, volume) → congestion impact must be *inferred* from violation density, not measured directly
+- ⚠️ No actual traffic flow data (speed, volume) → enforcement priority must be *inferred* via a Congestion Impact Score (CIS) proxy, not measured directly as true delay
 
 **What you can build with this:**
 1. Geospatial violation heatmap (Folium/Plotly/Kepler.gl)

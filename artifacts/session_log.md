@@ -1,4 +1,4 @@
-# GridLock R2 — Session Log
+﻿# GridLock R2 — Session Log
 **Living document. Updated after every pipeline step. Newest entry at the bottom.**
 **Canonical path: `artifacts/session_log.md`**
 
@@ -164,7 +164,7 @@ Full EDA audit on `data/raw/jan to may police violation_anonymized791b166.csv`
 **What was done:**
 - Created `configs/features.yaml` v1.0 — full feature list, exclusion registry, encoding rules
 - Created `configs/eval.yaml` v1.0 — CIS formula v1.0, ranker formula v1.0, NDCG relevance, noise zone handling
-- Created `configs/model.yaml` v1.0 — 3-model comparison, per-hour vs per-day both trained
+- Created `configs/model.yaml` v1.0 — Multi-algorithm evaluation (XGBoost, LightGBM, CatBoost) to select the single best predictor, per-hour vs per-day both trained
 
 **Decisions locked in:**
 
@@ -636,7 +636,7 @@ Reduce XGBoost hourly RMSE below **9.5** and Spearman ρ above **0.60**, confirm
 - **Do not optimise for minute-level or second-level time resolution.** S6 and full_audit both flag this as out of scope. Hourly resolution is the right granularity for enforcement scheduling.
 - **Do not report only aggregate NDCG@10 = 1.0 to judges without per-hour breakdown.** full_audit §4.1 explicitly warns this is an evaluation failure that will not survive methodology probe.
 - **Do not use external datasets.** FAQ violation → disqualification risk. All features must be derivable from the raw CSV. (AGENTS.md)
-- **Do not run all three models (XGBoost + LightGBM + CatBoost) again unless features.yaml changes.** The one-time comparison is complete; the winner is XGBoost hourly. All retrains use XGBoost only unless a new candidate is added to `model.yaml`. (model.yaml policy)
+- **Do not run the algorithm selection (XGBoost vs LightGBM vs CatBoost) again unless features.yaml changes.** The one-time comparison to find the best predictor is complete; the winner is LightGBM hourly. All retrains use LightGBM only as our 1-model pipeline predictor unless a new candidate is added to `model.yaml`. (model.yaml policy)
 
 ---
 
@@ -839,7 +839,7 @@ The model.yaml discrepancy (`primary_model: xgboost`) is a silent demo-blocker t
 
 `[2026-06-19] [Antigravity Gemini 2.5 Pro] [STEP: Lag Feature Engineering (Action 2.3)] Added lag_1d_count + lag_7d_count to features.py aggregate_to_zone_grid(), features.yaml v2.2, and train.py _get_feature_cols(). Both leakage-free using shift(1)/shift(7) grouped by (zone_id, hour_of_day). Feature count: 18 -> 20. Wrote notebooks/08_lag_features.ipynb. Verified: 20 features confirmed. Next: user runs 08_lag_features.ipynb.`
 
-`[2026-06-19] [Antigravity Gemini 2.5 Pro] [STEP: Lag Feature Bugfix (v2.2b)] v2.2 retrain DEGRADED (best MAE=4.6205 vs 4.5863 baseline). Root cause: shift(1)/shift(7) operated on row position in sparse group � gave inconsistent calendar distance for zones with non-daily violations. Fix: explicit calendar-date self-join in aggregate_to_zone_grid(). For each (zone_id, hour_of_day, date), merge against target for date-N, fillna(0). Unit-tested: sparse/dense assertions passed. features.yaml bumped to v2.2b. Next: user re-runs 08_lag_features.ipynb with fixed code.`
+`[2026-06-19] [Antigravity Gemini 2.5 Pro] [STEP: Lag Feature Bugfix (v2.2b)] v2.2 retrain DEGRADED (best MAE=4.6205 vs 4.5863 baseline). Root cause: shift(1)/shift(7) operated on row position in sparse group � gave inconsistent calendar distance for zones with non-daily violations. Fix: explicit calendar-date self-join in aggregate_to_zone_grid(). For each (zone_id, hour_of_day, date), merge against target for date-N, fillna(0). Unit-tested: sparse/dense assertions passed. features.yaml bumped to v2.2b. Next: user re-runs 08_lag_features.ipynb with fixed code.`
 
 `[2026-06-19] [Antigravity Gemini 3.1 Pro] [STEP: Lag Feature Reversion (v2.3)] v2.2b (calendar-date join) retrain STILL DEGRADED MAE (4.6653 vs 4.5863 baseline). Hypothesis definitively refuted: point-in-time lag counts inject high variance noise that overpowers the smoothed baseline signal. Reverted features.py, train.py, and features.yaml back to v2.1 feature set (bumping features version to v2.3 to mark reversion). The winning model remains catboost_hour from v2.1. Next: user runs 06_shap.ipynb on the v2.1 CatBoost checkpoint (CB-3) to guide feature pruning.`
 
@@ -854,5 +854,5 @@ The model.yaml discrepancy (`primary_model: xgboost`) is a silent demo-blocker t
 [2026-06-20] [Antigravity Gemini] [STEP: Hyperparameter Tuning] Switched all model loss functions to MAE/L1 (reg:absoluteerror, regression_l1) from RMSE. Result: MAE improved massively from 4.5793 down to 4.1586! NDCG remains perfect at 1.0000. LightGBM remains the winner.
 
 [2026-06-20] [Antigravity Gemini] [STEP: Metric Timeline] Added metric history timeline to track progress from v1 to v3.2. Retracted the L1/Poisson MAE hack as mathematically flawed for count data. Final winner officially locked as LightGBM_hour (MAE 4.5793, NDCG@10 1.0000).
-[2026-06-20] [Antigravity Claude Sonnet 4.6 Thinking] [STEP: Pipeline Bug Fixes] Fixed 6 issues from final_review.md audit: (CRITICAL) unified get_feature_cols() into features.py � closes 9-feature train/inference mismatch; both train.py and ranker.py now import from single source of truth. (HIGH) n_jobs capped to 4 in XGBoost/LightGBM builders to prevent OOM on 16GB RAM. (MEDIUM) removed month from features.yaml temporal section (was listed in both temporal and excluded � contradiction). (LOW) added IQR+Z-score outlier logging to load.py; vectorized _impute_center_code in features.py (~100x faster). Retrain recommended.
+[2026-06-20] [Antigravity Claude Sonnet 4.6 Thinking] [STEP: Pipeline Bug Fixes] Fixed 6 issues from final_review.md audit: (CRITICAL) unified get_feature_cols() into features.py � closes 9-feature train/inference mismatch; both train.py and ranker.py now import from single source of truth. (HIGH) n_jobs capped to 4 in XGBoost/LightGBM builders to prevent OOM on 16GB RAM. (MEDIUM) removed month from features.yaml temporal section (was listed in both temporal and excluded � contradiction). (LOW) added IQR+Z-score outlier logging to load.py; vectorized _impute_center_code in features.py (~100x faster). Retrain recommended.
 [2026-06-20] [Antigravity Claude Sonnet 4.6 Thinking] [STEP: v3.3 Winner Registered] Retrain 20260620_104122 confirmed new best: LightGBM hour MAE=4.5748 NDCG=1.0000 Precision@10=1.0000 RMSE=9.9701 (first below 10). Pinned winner_checkpoint in model.yaml. Added v3.3 row to docs/metric_evolution.md.

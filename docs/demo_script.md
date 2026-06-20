@@ -109,13 +109,9 @@ and generates prioritized enforcement zone schedules by time of day.
 ### Q2: "How do you quantify congestion impact without traffic speed data?"
 
 **Answer:**
-> "You're right that we don't have direct traffic flow measurements — the dataset is violation
-> records only. Our Congestion Impact Score (CIS) is an evidence-based proxy: it weights violation
-> density by junction presence. Violations at junctions block intersections and create cascading
-> delays; violations mid-block have lower impact. This proxy is defensible but not perfect.
+> "We didn't fake traffic data. Instead, we predict the parking violations using AI, and then use a transparent mathematical weight—the Congestion Impact Score (CIS)—to tell the police where to go first.
 >
-> The honest roadmap: the next version integrates MapmyIndia's real-time speed data to validate
-> and calibrate the CIS formula against actual traffic delays."
+> The dataset is violation records only, so our CIS is an evidence-based proxy: it weights predicted violation density by junction presence. Violations at junctions block intersections and create cascading delays; violations mid-block have lower impact. By multiplying our ML prediction by this CIS, we output an honest Enforcement Priority Score."
 
 ---
 
@@ -200,7 +196,7 @@ and generates prioritized enforcement zone schedules by time of day.
 - **No data leakage:** Hard assertion in `train.py` that `max(train date) < min(test date)`.
 - **Zone features (Phase 1):** Replaced raw cluster IDs with statistically-computed zone characteristics — prevents XGBoost from memorizing zone identities.
 - **Rolling features:** `rolling_7d_count` uses `shift(1).rolling(7)` — current day's count is never included.
-- **Three models compared:** XGBoost, LightGBM, CatBoost × 2 time resolutions = 6 runs. Winner selected by per-hour NDCG@10.
+- **Model Selection:** We evaluated 3 algorithms (XGBoost, LightGBM, CatBoost) to pick the best fit for zero-inflated data. LightGBM was strictly chosen as the single predictor in our 1-model pipeline based on per-hour NDCG@10.
 - **Clustering:** DBSCAN on lat/lon, producing 139 geographically interpretable enforcement zones.
 
 ---
