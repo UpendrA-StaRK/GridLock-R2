@@ -110,6 +110,9 @@ venv\Scripts\jupyter nbconvert --to notebook --execute notebooks/06_shap.ipynb
 | | `hour_cos` | cos(2π × hour / 24) — cyclical hour encoding |
 | | `dow_sin` | sin(2π × day_of_week / 7) — cyclical day encoding |
 | | `dow_cos` | cos(2π × day_of_week / 7) — cyclical day encoding |
+| | `week_of_year` | Calendar week integer |
+| | `quarter` | Calendar quarter (1-4) |
+| | `is_month_start/end` | Payday/quota pressure indicator |
 | | `is_weekend` | Saturday + Sunday flag |
 | | `month` | Seasonal enforcement pattern |
 | **Zone aggregates** | `zone_mean_count` | Mean violation count per zone (training period only) |
@@ -117,8 +120,13 @@ venv\Scripts\jupyter nbconvert --to notebook --execute notebooks/06_shap.ipynb
 | | `zone_cis_score` | CIS score from `cis_table.parquet` |
 | | `zone_junction_frac` | Fraction of violations at junctions in this zone |
 | | `zone_total_count` | Total violations in zone over training period |
+| | `rolling_std_7d` | Measure of zone unpredictability over the last week |
+| | `peak_hour_flag` | Binary indicator if current hour is traditionally the zone's peak |
 | **Spatial** | `fraction_at_junction` | Time-block-level junction fraction (varies per zone×hour) |
 | **Historical** | `rolling_7d_count` | 7-day lagged mean per (zone, hour) — **strongest signal** |
+| | `violation_count_lag_1h` | Exact violation count 1 hour ago |
+| | `violation_count_lag_24h` | Exact violation count 24 hours ago |
+| | `violation_count_lag_7d` | Exact violation count exactly 1 week ago |
 | **Categorical** | `dominant_violation_type` | Mode violation type in this zone×time block |
 | | `dominant_vehicle_type` | Mode vehicle type in this zone×time block |
 | | `violation_type_primary_encoded` | Encoded primary violation type |
@@ -137,7 +145,7 @@ venv\Scripts\jupyter nbconvert --to notebook --execute notebooks/06_shap.ipynb
 | Test | Mar 1 2024 – Apr 8 2024 | ~6,484 (zone×hour) |
 
 ### Models trained
-- XGBoost (winner), LightGBM, CatBoost — at both `hour` and `day` resolutions = **6 runs total**
+- XGBoost, LightGBM (winner), CatBoost — at both `hour` and `day` resolutions = **6 runs total**
 - Winner selected by **per-hour NDCG@10** (see Evaluation section)
 
 ---
@@ -148,12 +156,12 @@ Two tiers of ranking metrics are computed. The per-hour tier is the primary diff
 
 ### Tier 1 — Regression (count prediction accuracy)
 
-| Metric | Description | Current result (v2.1) |
+| Metric | Description | Current result (v3.2) |
 |---|---|---|
-| **MAE** | Mean absolute error in predicted violation count per zone-hour | **4.48** (XGBoost/hour) |
-| **RMSE** | Penalises large errors more; sensitive to high-violation outlier zones | ~10.2 |
+| **MAE** | Mean absolute error in predicted violation count per zone-hour | **4.57** (LightGBM/hour) |
+| **RMSE** | Penalises large errors more; sensitive to high-violation outlier zones | ~10.1 |
 | **Naive MAE** | Frequency baseline (no ML — ranks by raw historical count) | 6.97 |
-| **ML Lift %** | `(Naive_MAE - ML_MAE) / Naive_MAE × 100` | **+35.7%** |
+| **ML Lift %** | `(Naive_MAE - ML_MAE) / Naive_MAE × 100` | **+34.4%** |
 
 ### Tier 2 — Ranking (zone ordering quality)
 
@@ -267,7 +275,8 @@ Top-K zones across all 24 hours — suitable for police vehicle route planning.
 | **Phase 3** | Created `notebooks/06_shap.ipynb` — SHAP analysis with validation gate | ✅ Done |
 | **Phase 4** | DBSCAN re-tuning on full 268K dataset | ✅ Documented (silhouette -0.096, zones visually coherent) |
 | **Phase 5** | Added 24h time-slider to `static_output.py`. Created `docs/demo_script.md`. Created `notebooks/00_run_guide.ipynb`. | ✅ Done |
-| **Phase 6** | Cyclical temporal encoding (`hour_sin/cos`, `dow_sin/cos`). PAI metric. CIS normalization. ASTraM narrative. SHAP gate fix. Retrain verified: MAE -2.1%, Spearman +1.3%, all 3 gates passing. | ✅ Done — `git tag demo-ready` |
+| **Phase 6** | Cyclical temporal encoding (`hour_sin/cos`, `dow_sin/cos`). PAI metric. CIS normalization. ASTraM narrative. SHAP gate fix. Retrain verified: MAE -2.1%, Spearman +1.3%, all 3 gates passing. | ✅ Done |
+| **Phase 7** | Feature Ablation & Optimization. Added Calendar metadata, Lags, and Zone aggregations (v3.2). Final metrics: MAE 4.5793, NDCG@10 1.000. Winner: LightGBM_hour. Rejected L1/Poisson hacks as mathematically unsound for count data. | ✅ Done — `git tag demo-ready` |
 
 ---
 
@@ -280,6 +289,8 @@ GridLock_R2_Transfer/
 │   ├── eval.yaml           # CIS formula, ranker formula, NDCG relevance, split bounds
 │   └── model.yaml          # Model hyperparameters, winner checkpoint path
 ├── src/
+│   ├── dashboard/          # Streamlit interactive dashboard
+│   │   └── app.py
 │   ├── data/
 │   │   ├── validate.py     # Schema validator (8 hard checks)
 │   │   ├── load.py         # Ingest + dedup → 268K rows
@@ -288,6 +299,7 @@ GridLock_R2_Transfer/
 │   ├── models/
 │   │   └── clustering.py   # DBSCAN + KDE + CIS
 │   ├── training/
+│   │   ├── experiment.py   # Advanced hyperparameter and lag feature experiments
 │   │   └── train.py        # Multi-model training, leakage guard, zone aggregates
 │   ├── evaluation/
 │   │   └── metrics.py      # MAE/RMSE, NDCG@K, per-hour ranking metrics
@@ -302,8 +314,11 @@ GridLock_R2_Transfer/
 │   ├── 03_clustering.ipynb
 │   ├── 04_training.ipynb
 │   ├── 05_inference.ipynb
-│   └── 06_shap.ipynb       # SHAP feature importance + validation gate
+│   ├── 06_shap.ipynb       # SHAP feature importance + validation gate
+│   ├── 07_experiments.ipynb # Model experimentation
+│   └── 08_lag_features.ipynb # Lag feature analysis
 ├── docs/
+│   ├── metric_evolution.md # Historical log of metric improvements
 │   └── demo_script.md      # 2-min demo walkthrough + 5 judge Q&A answers
 ├── data/
 │   ├── raw/                # READ-ONLY — never modify
@@ -311,6 +326,8 @@ GridLock_R2_Transfer/
 │   └── outputs/            # HTML maps, CSVs, eval JSONs, SHAP plots
 ├── checkpoints/            # Saved model checkpoints
 ├── artifacts/
+│   ├── experiment_log.md   # Logs from feature/model experimentation
+│   ├── final_review.md     # Final metrics and evaluation
 │   ├── session_log.md      # Living log — all sessions, decisions, metrics
 │   └── Problem.md          # Original problem statement
 └── claude.md               # AI pair-programming context (read before any AI session)

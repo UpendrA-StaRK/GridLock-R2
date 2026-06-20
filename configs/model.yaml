@@ -71,10 +71,18 @@ model_comparison:
 # Set this after the one-time comparison run. Everything after uses this only.
 # Rerun all three ONLY if: features change significantly, DBSCAN zones rebuild,
 # or a new candidate model is added to this file.
-primary_model: "xgboost"        # e.g. "lightgbm" — set after comparison
-primary_time_resolution: "hour"  # e.g. "hour" or "day" — set after comparison
-winner_ndcg_at_10: 1.000000    # e.g. 0.74 — record the winning score
-comparison_run_date: "2026-06-16"  # e.g. "2026-06-17" — set after comparison
+primary_model: "lightgbm"        # Updated 2026-06-20: LightGBM won v3.3 (MAE 4.5748, NDCG 1.0000)
+primary_time_resolution: "hour"  # hour resolution wins across all models
+winner_ndcg_at_10: 1.000000
+comparison_run_date: "2026-06-20"
+winner_mae: 4.5748
+winner_rmse: 9.9701
+winner_precision_at_10: 1.0000
+winner_checkpoint: "lightgbm_hour_20260620_104122"  # Pinned — v3.3 features (25 cols, inference fix)
+                                                     # Bug fix: unified get_feature_cols() restored 9 missing
+                                                     # inference features. month excluded per v3.0.
+                                                     # DO NOT change to a higher-timestamp checkpoint
+                                                     # unless you retrain on the current features.yaml.
 
 when_to_retrain_all:
   - "features.yaml changes (feature added/dropped)"
@@ -97,7 +105,7 @@ xgboost:
   colsample_bytree: 0.8
   reg_alpha: 0.1           # L1 regularisation
   reg_lambda: 1.0          # L2 regularisation
-  n_jobs: -1               # Use all CPU cores
+  n_jobs: 4                # Capped to 4 (was -1); prevents OOM on 16GB RAM with 6 concurrent models
   seed: 42
   early_stopping_rounds: 20
   notes: >
@@ -117,7 +125,7 @@ lightgbm:
   colsample_bytree: 0.8
   reg_alpha: 0.1
   reg_lambda: 1.0
-  n_jobs: -1
+  n_jobs: 4                # Capped to 4 (was -1); prevents OOM on 16GB RAM with 6 concurrent models
   seed: 42
   early_stopping_rounds: 20
   notes: >
@@ -143,6 +151,35 @@ catboost:
     causes issues for XGB/LGB, CatBoost handles raw categoricals natively.
     Slower than LightGBM but often better on high-cardinality categoricals.
     ~2-4 min on i7-12700H.
+
+# ── Experiment Variants ────────────────────────────────────────────
+# These are single-factor ablations run by src/training/experiment.py.
+# They are NOT part of the standard 6-model training run.
+# Each variant changes ONE parameter vs. the base config.
+# Run: from src.training.experiment import run_experiments
+
+xgboost_poisson:
+  # Variant: XGBoost with count:poisson loss (Action 2.1 from PLAN / PS1)
+  # Rationale: RMSE/MAE ratio=2.37 confirms MSE penalises spike errors.
+  # count:poisson uses log-link natively for right-skewed count distributions.
+  # Inherits ALL other params from xgboost block — only objective changes.
+  base: xgboost
+  changes:
+    objective: count:poisson
+    eval_metric: rmse           # keep rmse for consistent comparison
+  expected_impact: RMSE reduction 5-15% (S1, S5 findings)
+  experiment_date: "2026-06-19"
+
+catboost_poisson:
+  # Variant: CatBoost with Poisson loss (Action CB-1 from MODEL UPDATE)
+  # Rationale: Same RMSE/MAE spike-error argument applies to CatBoost RMSE loss.
+  # CatBoost native Poisson uses log-link for count data — one param change.
+  # Inherits ALL other params from catboost block — only loss_function changes.
+  base: catboost
+  changes:
+    loss_function: Poisson
+  expected_impact: RMSE reduction 5-15% (same rationale as xgboost_poisson)
+  experiment_date: "2026-06-19"
 
 # ── Additional Candidates (run if above three are insufficient) ────
 # Add any new model here before training — never add mid-experiment.

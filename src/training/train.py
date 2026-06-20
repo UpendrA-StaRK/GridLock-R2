@@ -73,61 +73,14 @@ def _load_configs(project_root: Path) -> dict[str, Any]:
 
 
 # ── Feature columns ───────────────────────────────────────────────────────────
+# Single source of truth lives in src/data/features.py::get_feature_cols.
+# Import it here — never re-define locally (fixes I-5/I-6 train vs inference mismatch).
+from src.data.features import get_feature_cols as _get_feature_cols_impl
+
 
 def _get_feature_cols(features_cfg: dict[str, Any], time_resolution: str) -> list[str]:
-    """
-    Build ordered feature column list from configs/features.yaml.
-
-    Phase 1 (v2.0): zone_id, police_station_id, center_code_encoded are REMOVED.
-    Phase 3 (v2.1): hour_of_day → hour_sin + hour_cos; day_of_week → dow_sin + dow_cos.
-    Cyclical encoding prevents the "midnight paradox" where hour 23 and hour 0
-    appear numerically far apart to tree-based models.
-
-    For zone-grid training we use:
-      temporal:    hour_sin + hour_cos (only for 'hour'), dow_sin + dow_cos, is_weekend, month
-      zone_aggs:   zone_mean_count, zone_median_count, zone_cis_score,
-                   zone_junction_frac, zone_total_count
-      spatial:     fraction_at_junction (time-block-level junction fraction)
-      historical:  rolling_7d_count (7-day lagged mean count per zone×hour — strongest signal)
-      categorical: dominant_violation_type, dominant_vehicle_type,
-                   violation_type_primary_encoded, vehicle_type_encoded
-      optional:    data_sent_to_scita_mean
-    """
-    cols: list[str] = []
-
-    # Temporal — cyclical encoding (Phase 3 / v2.1)
-    # hour_sin / hour_cos only relevant for hour resolution
-    if time_resolution == "hour":
-        cols += ["hour_sin", "hour_cos"]
-    cols += ["dow_sin", "dow_cos", "is_weekend", "month"]
-
-    # Zone aggregate features (Phase 1 — replaces zone_id lookup table pattern)
-    cols += [
-        "zone_mean_count",
-        "zone_median_count",
-        "zone_cis_score",
-        "zone_junction_frac",
-        "zone_total_count",
-    ]
-
-    # Spatial (time-block-level junction fraction)
-    cols.append("fraction_at_junction")
-
-    # Historical — rolling 7-day lagged count (most important feature)
-    cols.append("rolling_7d_count")
-
-    # Categorical (aggregated versions from Phase B)
-    cols += [
-        "dominant_violation_type",
-        "dominant_vehicle_type",
-        "violation_type_primary_encoded",
-        "vehicle_type_encoded",
-    ]
-
-    # Optional
-    cols.append("data_sent_to_scita_mean")
-
-    return cols
+    """Thin wrapper: delegates to src.data.features.get_feature_cols (single source of truth)."""
+    return _get_feature_cols_impl(time_resolution)  # month excluded at features.py level (v3.0)
 
 
 def _add_cyclical_temporal_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -247,6 +200,24 @@ def _add_zone_aggregate_features(
                 "zone_junction_frac", "zone_total_count"]:
         train_df[col] = train_df[col].fillna(0.0).astype("float32")
         test_df[col]  = test_df[col].fillna(0.0).astype("float32")
+
+    # peak_hour_flag logic
+    if "hour_of_day" in train_df.columns:
+        zone_hour_means = train_df.groupby(["zone_id", "hour_of_day"], observed=True)[target_col].mean().reset_index()
+        peak_hours = zone_hour_means.loc[zone_hour_means.groupby("zone_id", observed=True)[target_col].idxmax()][["zone_id", "hour_of_day"]]
+        peak_hours = peak_hours.rename(columns={"hour_of_day": "zone_peak_hour"})
+        
+        train_df = train_df.merge(peak_hours, on="zone_id", how="left")
+        test_df = test_df.merge(peak_hours, on="zone_id", how="left")
+        
+        train_df["peak_hour_flag"] = (train_df["hour_of_day"] == train_df["zone_peak_hour"]).astype("int8")
+        test_df["peak_hour_flag"] = (test_df["hour_of_day"] == test_df["zone_peak_hour"]).astype("int8")
+        
+        train_df.drop(columns=["zone_peak_hour"], inplace=True)
+        test_df.drop(columns=["zone_peak_hour"], inplace=True)
+    else:
+        train_df["peak_hour_flag"] = 0
+        test_df["peak_hour_flag"] = 0
 
     n_zones_stats = len(zone_stats)
     logger.info(
@@ -384,7 +355,7 @@ def _build_xgboost(model_cfg: dict[str, Any], seed: int) -> Any:
         colsample_bytree    = xgb_cfg.get("colsample_bytree",  0.8),
         reg_alpha           = xgb_cfg.get("reg_alpha",         0.1),
         reg_lambda          = xgb_cfg.get("reg_lambda",        1.0),
-        n_jobs              = xgb_cfg.get("n_jobs",            -1),
+        n_jobs              = xgb_cfg.get("n_jobs",            4),   # was -1; capped to avoid OOM on 16GB (I-4)
         random_state        = seed,
         early_stopping_rounds = xgb_cfg.get("early_stopping_rounds", 20),
         verbosity           = 0,
@@ -405,7 +376,7 @@ def _build_lightgbm(model_cfg: dict[str, Any], seed: int) -> Any:
         colsample_bytree    = lgb_cfg.get("colsample_bytree",  0.8),
         reg_alpha           = lgb_cfg.get("reg_alpha",         0.1),
         reg_lambda          = lgb_cfg.get("reg_lambda",        1.0),
-        n_jobs              = lgb_cfg.get("n_jobs",            -1),
+        n_jobs              = lgb_cfg.get("n_jobs",            4),   # was -1; capped to avoid OOM on 16GB (I-4)
         random_state        = seed,
         verbose             = -1,
     )

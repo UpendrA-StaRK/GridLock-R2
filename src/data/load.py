@@ -229,6 +229,21 @@ def load_raw(
         f"({rows_dropped_dedup:,} exact duplicates removed)"
     )
 
+    # ── IQR + Z-score outlier detection on lat/lon (I-1: AGENTS.md mandate) ────
+    import numpy as np
+    for _col in ["latitude", "longitude"]:
+        if _col in df.columns:
+            q1, q3 = df[_col].quantile(0.25), df[_col].quantile(0.75)
+            iqr = q3 - q1
+            n_iqr = int(((df[_col] < q1 - 1.5 * iqr) | (df[_col] > q3 + 1.5 * iqr)).sum())
+            z_scores = (df[_col] - df[_col].mean()) / df[_col].std()
+            n_z = int((z_scores.abs() > 3).sum())
+            if n_iqr > 0 or n_z > 0:
+                logger.warning(f"  ⚠ {_col}: IQR outliers={n_iqr:,}, Z-score>3={n_z:,} (logged; not dropped)")
+            else:
+                logger.debug(f"  ✓ {_col}: no IQR/Z-score outliers")
+
+
     # ── Final metadata ────────────────────────────────────────────────────────
     metadata["rows_final"] = len(df)
     metadata["cols_final"] = len(df.columns)

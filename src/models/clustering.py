@@ -107,7 +107,7 @@ def dbscan_grid_search(
     with tqdm(total=total, desc="DBSCAN grid search", unit="combo") as pbar:
         for eps in eps_values:
             for min_samples in min_samples_values:
-                db = DBSCAN(eps=eps, min_samples=min_samples, n_jobs=-1)
+                db = DBSCAN(eps=eps, min_samples=min_samples, n_jobs=None)
                 labels = db.fit_predict(coords_scaled)
 
                 n_clusters  = len(set(labels)) - (1 if -1 in labels else 0)
@@ -202,7 +202,7 @@ def run_clustering(
         pbar.update(1)
 
         pbar.set_description("Fitting DBSCAN")
-        db = DBSCAN(eps=eps, min_samples=min_samples, n_jobs=-1)
+        db = DBSCAN(eps=eps, min_samples=min_samples, n_jobs=None)
         labels = db.fit_predict(coords_scaled)
         pbar.update(1)
 

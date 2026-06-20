@@ -46,8 +46,10 @@ def find_best_checkpoint(
     Find the best checkpoint directory to use for inference.
 
     Priority order:
-      1. Use primary_model + primary_time_resolution from configs/model.yaml
-      2. If not set, pick the most recent checkpoint dir that matches model/resolution filters
+      0. winner_checkpoint in configs/model.yaml -> use that exact directory (PINNED)
+         Guards against a newer-timestamp degraded checkpoint overriding the winner.
+      1. primary_model + primary_time_resolution from configs/model.yaml
+      2. Most recent checkpoint dir matching model/resolution filters (timestamp sort)
 
     Args:
         project_root:     Project root directory.
@@ -63,12 +65,6 @@ def find_best_checkpoint(
     with model_cfg_path.open("r", encoding="utf-8") as f:
         model_cfg = yaml.safe_load(f)
 
-    # Determine target model + resolution
-    if model_name is None:
-        model_name = model_cfg.get("primary_model")
-    if time_resolution is None:
-        time_resolution = model_cfg.get("primary_time_resolution")
-
     ckpt_root = project_root / "checkpoints"
     if not ckpt_root.exists():
         raise FileNotFoundError(
@@ -76,7 +72,32 @@ def find_best_checkpoint(
             "Run notebooks/04_training.ipynb first."
         )
 
-    # Filter candidate dirs
+    # -- Priority 0: explicit winner_checkpoint pin --------------------------------
+    # Set in model.yaml after winning run is identified.
+    # Prevents a newer-timestamp degraded checkpoint (refuted experiment) from
+    # silently overriding the pinned winner when model_name/time_resolution are
+    # not explicitly passed (i.e. default auto-discovery path).
+    pinned = model_cfg.get("winner_checkpoint")
+    if pinned and model_name is None and time_resolution is None:
+        pinned_dir = ckpt_root / str(pinned)
+        if pinned_dir.exists() and pinned_dir.is_dir():
+            logger.info(
+                f"Using PINNED winner checkpoint from model.yaml: '{pinned_dir.name}' "
+                "(to override: pass model_name or ckpt_dir explicitly to load_ranker)"
+            )
+            return pinned_dir
+        else:
+            logger.warning(
+                f"winner_checkpoint '{pinned}' in model.yaml not found at '{pinned_dir}'. "
+                "Falling back to timestamp-sort discovery."
+            )
+
+    # -- Priority 1 + 2: model/resolution filter -> newest-first timestamp sort ----
+    if model_name is None:
+        model_name = model_cfg.get("primary_model")
+    if time_resolution is None:
+        time_resolution = model_cfg.get("primary_time_resolution")
+
     prefix = f"{model_name}_{time_resolution}_" if (model_name and time_resolution) else ""
     candidates = sorted(
         [d for d in ckpt_root.iterdir() if d.is_dir() and d.name.startswith(prefix)],
@@ -246,52 +267,14 @@ def load_ranker(
     }
 
 
-# ── Feature column builder (must match train.py exactly) ─────────────────────
+# ── Feature column builder (single source of truth in src/data/features.py) ──
+# Previously 9 features missing vs train.py (I-5/I-6 — fixes train/inference mismatch).
+from src.data.features import get_feature_cols as _get_feature_cols_impl
+
 
 def _get_feature_cols(time_resolution: str, zone_grid_df: pd.DataFrame) -> list[str]:
-    """
-    Build feature column list consistent with training (train.py _get_feature_cols).
-
-    Phase 1 update: Uses zone aggregate features instead of raw zone_id/police_station_id/
-    center_code_encoded. Must match train.py _get_feature_cols() exactly.
-    Phase 3 update (v2.1): hour_of_day → hour_sin + hour_cos; day_of_week → dow_sin + dow_cos.
-    """
-    candidates = []
-    # Temporal (cyclical encoding — Phase 3 / v2.1)
-    if time_resolution == "hour":
-        candidates += ["hour_sin", "hour_cos"]
-    candidates += ["dow_sin", "dow_cos", "is_weekend", "month"]
-
-    # Zone aggregate features (Phase 1 — replaces zone_id lookup table pattern)
-    candidates += [
-        "zone_mean_count",
-        "zone_median_count",
-        "zone_cis_score",
-        "zone_junction_frac",
-        "zone_total_count",
-    ]
-
-    # Spatial (time-block-level junction fraction)
-    candidates.append("fraction_at_junction")
-
-    # Historical
-    candidates.append("rolling_7d_count")
-
-    # Categorical (aggregated versions from Phase B)
-    candidates += [
-        "dominant_violation_type",
-        "dominant_vehicle_type",
-        "violation_type_primary_encoded",
-        "vehicle_type_encoded",
-    ]
-
-    # Optional
-    candidates.append("data_sent_to_scita_mean")
-
-    # Return all candidates — the scaffold's fillna(0) handles genuinely missing cols.
-    # Do NOT filter by zone_grid_df.columns: zone aggregate cols (zone_mean_count etc.)
-    # live in zone_stats_df, not the grid, so filtering would silently drop them.
-    return candidates
+    """Delegate to single source of truth (fixes I-5/I-6). zone_grid_df kept for API compat."""
+    return _get_feature_cols_impl(time_resolution)
 
 
 # ── Zone scaffold builder ─────────────────────────────────────────────────────

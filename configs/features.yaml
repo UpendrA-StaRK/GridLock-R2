@@ -25,7 +25,11 @@ temporal:
   - dow_sin              # float — sin(2π × day_of_week / 7)
   - dow_cos              # float — cos(2π × day_of_week / 7)
   - is_weekend           # int [0, 1]   — Saturday + Sunday = 1
-  - month                # int [1, 12]  — captures seasonal enforcement patterns
+  # month — EXCLUDED v3.0 (SHAP < 2%; see excluded section below)
+  - week_of_year         # int [1, 52]
+  - quarter              # int [1, 4]
+  - is_month_start       # int [0, 1]
+  - is_month_end         # int [0, 1]
 
 # ── Historical / Rolling Features ───────────────────────────────────
 # Computed during Phase B (aggregate_to_zone_grid) using shift(1).rolling(7).mean()
@@ -36,6 +40,10 @@ historical:
                          # or by zone_id for day resolution.
                          # shift(1) ensures today's count never leaks in.
                          # Expected to be top SHAP feature after training.
+  - rolling_std_7d
+  - violation_count_lag_1h
+  - lag_24h
+  - lag_7d
 
 # ── Zone Aggregate Features (Phase 1 replacement for zone_id) ────────
 # IMPORTANT: These replace zone_id (DBSCAN cluster label), police_station_id,
@@ -56,10 +64,9 @@ zone_aggregates:
                          # Robust to outlier enforcement surges
   - zone_cis_score       # float — CIS score (junction_weight × violation_density) per zone
                          # Encodes the congestion-risk profile of each zone
-  - zone_junction_frac   # float — fraction of all violations at junctions in this zone
-                         # Zone-level static spatial feature (complement to fraction_at_junction)
   - zone_total_count     # int   — total violations in zone over training period
                          # Absolute scale signal (some zones are larger / more active)
+  - peak_hour_flag       # int [0, 1] — 1 if the current hour is the peak hour for this zone
 
 # ── Spatial Features ──────────────────────────────────────────────
 # fraction_at_junction is time-block-level (varies per zone×hour).
@@ -114,6 +121,10 @@ excluded:
   - zone_id                # Ordinal encoding of categorical ID — meaningless numerically
   - police_station_id      # Collinear with zone_id (each zone ≈ one station)
   - center_code_encoded    # Collinear with police_station_id — no independent signal
+  - lag_1d_count           # EXCLUDED (v2.3) — Injects high variance noise, degrades MAE
+  - lag_7d_count           # EXCLUDED (v2.3) — Injects high variance noise, degrades MAE
+  - month                  # EXCLUDED (v3.0) — <2% SHAP importance (noisy)
+  - zone_junction_frac     # EXCLUDED (v3.0) — <2% SHAP importance (noisy)
 
 # ── Encoding Registry ─────────────────────────────────────────────
 # LabelEncoder mappings must be saved alongside model checkpoint.
@@ -130,14 +141,12 @@ encodings:
   # police_station_id and center_code_encoded are REMOVED (Phase 1 — collinear with zone)
 
 # ── Version / Metadata ────────────────────────────────────────────
-version: "2.1"
-last_updated: "2026-06-18"
-updated_by: "GridLock Phase 3 Improvement"
-basis: "Full research audit 2026-06-18 — cyclical encoding for temporal features"
+# ── Version / Metadata ────────────────────────────────────────────
+version: "3.0"
+last_updated: "2026-06-20"
+updated_by: "Gemini 3.1 Pro (High)"
+basis: "Action 2.2 Feature Pruning (CatBoost SHAP CB-3). Pruned features with < 2% relative importance: month (1.7%), zone_junction_frac (1.6%)."
 note: >
-  Features v2.1 (Phase 3): hour_of_day → hour_sin + hour_cos;
-  day_of_week → dow_sin + dow_cos. Cyclical encoding preserves temporal
-  adjacency (hour 23 ≈ hour 0 in feature space). All other features unchanged.
-  Retrain required. Fallback to v2.0 checkpoint if new model doesn't improve.
+  Features v3.0: Removed noisy/unhelpful features based on SHAP analysis.
   Do not change feature names without: (1) updating this file, (2) appending to
   session_log.md, (3) retraining from scratch.

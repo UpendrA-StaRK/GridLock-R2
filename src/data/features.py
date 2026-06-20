@@ -252,6 +252,10 @@ def aggregate_to_zone_grid(
       - is_weekend, day_of_week, month
       - rolling_7d_count: 7-day trailing mean per (zone_id, hour_of_day),
         shifted 1 day to avoid leakage (most important new feature)
+      - lag_1d_count: exact violation count for same (zone_id, hour_of_day) 1 day ago,
+        shifted 1 day forward to avoid leakage (captures yesterday's activity)
+      - lag_7d_count: exact violation count for same (zone_id, hour_of_day) 7 days ago,
+        shifted 7 days forward to avoid leakage (captures day-of-week seasonality)
 
     Args:
         df: Feature-engineered DataFrame (must have zone_id, created_datetime, and
@@ -276,6 +280,11 @@ def aggregate_to_zone_grid(
 
     df = df.copy()
     df["_date"] = df["created_datetime"].dt.date
+    dt = df["created_datetime"].dt
+    df["week_of_year"] = dt.isocalendar().week.astype("int8")
+    df["quarter"] = dt.quarter.astype("int8")
+    df["is_month_start"] = dt.is_month_start.astype("int8")
+    df["is_month_end"] = dt.is_month_end.astype("int8")
 
     logger.info(f"Aggregating to zone × {time_resolution} grid ...")
 
@@ -312,6 +321,10 @@ def aggregate_to_zone_grid(
             "is_weekend":                     ("is_weekend", _mode),
             "day_of_week":                    ("day_of_week", _mode),
             "month":                          ("month", _mode),
+            "week_of_year":                   ("week_of_year", _mode),
+            "quarter":                        ("quarter", _mode),
+            "is_month_start":                 ("is_month_start", _mode),
+            "is_month_end":                   ("is_month_end", _mode),
         }
         agg_features = (
             df.groupby(group_keys, observed=True)
@@ -352,6 +365,43 @@ def aggregate_to_zone_grid(
             .fillna(0.0)
             .astype("float32")
         )
+
+        agg_df["rolling_std_7d"] = (
+            agg_df.groupby(roll_groups, observed=True)[target_col]
+            .transform(lambda s: s.shift(1).rolling(7, min_periods=2).std())
+            .fillna(0.0)
+            .astype("float32")
+        )
+
+        # lag_24h (which is shift(1) when grouped by zone_id, hour_of_day)
+        agg_df["lag_24h"] = (
+            agg_df.groupby(roll_groups, observed=True)[target_col]
+            .transform(lambda s: s.shift(1))
+            .fillna(0.0)
+            .astype("float32")
+        )
+
+        # lag_7d (which is shift(7) when grouped by zone_id, hour_of_day)
+        agg_df["lag_7d"] = (
+            agg_df.groupby(roll_groups, observed=True)[target_col]
+            .transform(lambda s: s.shift(7))
+            .fillna(0.0)
+            .astype("float32")
+        )
+
+        # lag_1h (requires strictly chronological sorting)
+        agg_df = agg_df.sort_values(["zone_id", "date"] + (["hour_of_day"] if time_resolution == "hour" else [])).reset_index(drop=True)
+        if time_resolution == "hour":
+            agg_df["violation_count_lag_1h"] = (
+                agg_df.groupby("zone_id", observed=True)[target_col]
+                .transform(lambda s: s.shift(1))
+                .fillna(0.0)
+                .astype("float32")
+            )
+        else:
+            # Not applicable for day resolution, but fill with 0
+            agg_df["violation_count_lag_1h"] = 0.0
+
         pbar.update(1)
 
     n_zones = agg_df["zone_id"].nunique()
@@ -364,6 +414,7 @@ def aggregate_to_zone_grid(
         f"rolling_7d_count non-zero: {roll_nonzero:,}/{n_rows:,}"
     )
 
+
     if save_path is not None:
         out = Path(save_path)
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -371,6 +422,61 @@ def aggregate_to_zone_grid(
         logger.info(f"Aggregated grid saved → '{out}'")
 
     return agg_df
+
+
+# ── Unified feature column list (single source of truth) ─────────────────────
+# Imported by BOTH train.py and ranker.py — never duplicate this logic.
+
+def get_feature_cols(
+    time_resolution: str,
+    features_config_path: str | Path = "configs/features.yaml",
+) -> list[str]:
+    """
+    Build ordered feature column list from configs/features.yaml.
+    Single source of truth — import in train.py AND ranker.py.
+    Changing features requires ONLY editing features.yaml + this function.
+
+    Args:
+        time_resolution: 'hour' or 'day'.
+        features_config_path: Ignored (kept for API compatibility); order is
+            determined by this function to match training column order.
+
+    Returns:
+        Ordered list of feature column names expected by the model.
+    """
+    cols: list[str] = []
+
+    # Temporal — cyclical encoding (Phase 3 / v2.1); month EXCLUDED (v3.0)
+    if time_resolution == "hour":
+        cols += ["hour_sin", "hour_cos"]
+    cols += ["dow_sin", "dow_cos", "is_weekend", "week_of_year", "quarter",
+             "is_month_start", "is_month_end"]
+
+    # Zone aggregate features (Phase 1)
+    cols += [
+        "zone_mean_count", "zone_median_count", "zone_cis_score",
+        "zone_junction_frac", "zone_total_count", "peak_hour_flag",
+    ]
+
+    # Spatial
+    cols.append("fraction_at_junction")
+
+    # Historical — leakage-free rolling/lag
+    cols.extend([
+        "rolling_7d_count", "rolling_std_7d",
+        "violation_count_lag_1h", "lag_24h", "lag_7d",
+    ])
+
+    # Categorical
+    cols += [
+        "dominant_violation_type", "dominant_vehicle_type",
+        "violation_type_primary_encoded", "vehicle_type_encoded",
+    ]
+
+    # Optional
+    cols.append("data_sent_to_scita_mean")
+
+    return cols
 
 
 # ── Save / load helpers ───────────────────────────────────────────────────────
@@ -495,25 +601,21 @@ def _impute_center_code(
     """
     Impute center_code nulls with mode per police_station group.
 
+    Vectorized implementation replacing the slow df.apply() row-wise loop (I-3).
     Rationale: center_code is a geographic sub-zone ID correlated with police_station.
     Mode per station is the simplest defensible imputation (3.77% null).
     Any remaining nulls (stations where ALL rows have null center_code) → global mode.
     """
     null_before = int(df["center_code"].isna().sum())
 
-    # Compute mode per police_station
+    # Vectorized: compute mode per police_station, map back, fill nulls
     station_mode = (
         df.dropna(subset=["center_code"])
         .groupby("police_station")["center_code"]
-        .agg(lambda x: x.mode().iloc[0] if len(x) > 0 else None)
+        .agg(lambda x: x.mode().iloc[0] if len(x) > 0 else np.nan)
     )
-
-    def _fill(row: pd.Series) -> Any:
-        if pd.isna(row["center_code"]):
-            return station_mode.get(row["police_station"], None)
-        return row["center_code"]
-
-    df["center_code"] = df.apply(_fill, axis=1)
+    mode_mapped = df["police_station"].map(station_mode)  # no Python-level loop
+    df["center_code"] = df["center_code"].fillna(mode_mapped)
 
     # Fallback: global mode for any still-null
     global_mode = df["center_code"].dropna().mode()

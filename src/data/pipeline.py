@@ -208,18 +208,18 @@ def step8_infer(
     # Load ranker (auto-discovers winner from model.yaml)
     ranker = load_ranker(project_root=project_root)
 
-    # Load eval_metrics from winner checkpoint training_meta.json (for scorecard display)
+    # Load eval_metrics from the most recent eval JSON (for scorecard display)
+    import glob
     eval_metrics: dict[str, Any] | None = None
     try:
-        ckpt_dir_path = ranker.get("ckpt_dir")
-        if ckpt_dir_path is not None:
-            meta_path = Path(ckpt_dir_path) / "training_meta.json"
-            if meta_path.exists():
-                with meta_path.open("r", encoding="utf-8") as _f:
-                    _meta = _json.load(_f)
-                eval_metrics = _meta.get("metrics", None)
-                if eval_metrics:
-                    logger.info(f"Eval metrics loaded from '{Path(ckpt_dir_path).name}' for scorecard")
+        eval_files = sorted(glob.glob(str(project_root / "data" / "outputs" / "eval_*.json")), reverse=True)
+        if eval_files:
+            with open(eval_files[0], "r", encoding="utf-8") as _f:
+                ev_data = _json.load(_f)
+            model_key = f"{ranker['model_name']}_{ranker['time_resolution']}"
+            eval_metrics = ev_data.get(model_key)
+            if eval_metrics:
+                logger.info(f"Eval metrics loaded from '{Path(eval_files[0]).name}' for scorecard")
     except Exception as _exc:
         logger.warning(f"Could not load eval_metrics for scorecard: {_exc}")
 

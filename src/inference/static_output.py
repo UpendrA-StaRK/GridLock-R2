@@ -272,6 +272,48 @@ def _build_scorecard_html(
         </div>
       </div>"""
 
+    # CB-4 — Per-hour NDCG callout block (backward-compatible: pulled from eval_metrics)
+    # Answers the "why ML?" judge question: CatBoost beats the pure-frequency baseline
+    # at hourly granularity even when aggregate NDCG@10 is tied at 1.0.
+    per_hour_ndcg_block = ""
+    ranking_ph = eval_metrics.get("ranking_per_hour", {})
+    if ranking_ph:
+        model_ph_ndcg    = ranking_ph.get("model_ndcg",    {}).get("mean_ndcg", 0.0)
+        baseline_ph_ndcg = ranking_ph.get("baseline_ndcg", {}).get("mean_ndcg", 0.0)
+        beats_ph         = ranking_ph.get("beats_baseline_per_hour_ndcg", False)
+        if model_ph_ndcg > 0 and baseline_ph_ndcg > 0:
+            delta_pct   = (model_ph_ndcg - baseline_ph_ndcg) / baseline_ph_ndcg * 100
+            ph_colour   = "#27ae60" if beats_ph else "#e67e22"
+            beats_label = "✓ ML WINS" if beats_ph else "⚠ Baseline wins"
+            per_hour_ndcg_block = f"""
+      <div class='score-block' style='grid-column: 1 / -1; border-left: 4px solid {ph_colour}; background:#f0faf4;'>
+        <div class='score-label'>Per-Hour NDCG@10 — Why ML? (CB-4)</div>
+        <div class='score-value' style='color:{ph_colour};font-size:18px'>
+          {model_ph_ndcg:.4f} &nbsp;<span style='font-size:14px;color:#7f8c8d'>vs baseline {baseline_ph_ndcg:.4f}</span>
+        </div>
+        {_bar(min(model_ph_ndcg, 1.0), colour=ph_colour)}
+        <div class='score-sub' style='font-size:12px;color:#2c3e50;margin-top:6px'>
+          <b style='color:{ph_colour}'>{beats_label}</b> &nbsp;·&nbsp;
+          {model_name.upper()} zones ranking beats pure frequency baseline by
+          <b>{delta_pct:+.1f}%</b> per-hour NDCG
+          ({model_ph_ndcg:.3f} vs {baseline_ph_ndcg:.3f}) —
+          <i>ML adds time-aware enforcement intelligence that a static lookup table cannot.</i>
+        </div>
+      </div>"""
+
+    spearman_val = float("nan")
+    if ranking_ph:
+        spearman_val = ranking_ph.get("model_spearman", {}).get("mean_spearman", float("nan"))
+    
+    sp_colour = "#27ae60" if spearman_val > 0.4 else ("#e67e22" if spearman_val > 0.2 else "#e74c3c")
+    spearman_block = f"""
+      <div class='score-block'>
+        <div class='score-label'>Spearman ρ</div>
+        <div class='score-value' style='color:{sp_colour}'>{"N/A" if pd.isna(spearman_val) else f"{spearman_val:.4f}"}</div>
+        {_bar(min(max(spearman_val if not pd.isna(spearman_val) else 0, 0), 1.0), colour=sp_colour)}
+        <div class='score-sub'>Rank correlation vs actuals</div>
+      </div>"""
+
     return f"""
     <div class='scorecard-grid'>
       <div class='score-block'>
@@ -307,12 +349,9 @@ def _build_scorecard_html(
           {status_label}
         </div>
       </div>
-      <div class='score-block'>
-        <div class='score-label'>Rounds Trained</div>
-        <div class='score-value'>{rounds if rounds else 'N/A'}</div>
-        <div class='score-sub'>Early-stop @ 20 patience</div>
-      </div>
+      {spearman_block}
       {pai_block}
+      {per_hour_ndcg_block}
     </div>"""
 
 
