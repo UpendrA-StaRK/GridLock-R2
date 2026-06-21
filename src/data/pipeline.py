@@ -195,14 +195,15 @@ def step8_infer(
     target_date: str,
     target_hour: int,
     top_k: int = 10,
+    ckpt_dir: str | Path | None = None,
 ) -> dict[str, Any]:
     """Step 8 — Inference: rank zones and generate static HTML output."""
     import json as _json
     from src.inference.ranker import load_ranker, rank_zones, rank_day_schedule
     from src.inference.static_output import build_zone_centroids, generate_static_output
 
-    # Load ranker (auto-discovers winner from model.yaml)
-    ranker = load_ranker(project_root=project_root)
+    # Load ranker (auto-discovers winner from model.yaml or uses explicit ckpt_dir)
+    ranker = load_ranker(project_root=project_root, ckpt_dir=ckpt_dir)
 
     # Load eval_metrics from the most recent eval JSON (for scorecard display)
     import glob
@@ -299,6 +300,7 @@ def run_pipeline(
     skip_training: bool = False,
     skip_clustering: bool = False,
     skip_features: bool = False,
+    ckpt_dir: str | None = None,
 ) -> dict[str, Any]:
     """
     Run the full GridLock R2 pipeline end-to-end.
@@ -320,6 +322,7 @@ def run_pipeline(
         skip_training:   If True, skip Step 7 (use existing checkpoint).
         skip_clustering: If True, skip Steps 4–6 (use existing parquet files).
         skip_features:   If True, skip Steps 1–3 (use existing features_row_level.parquet).
+        ckpt_dir:        Explicit checkpoint directory path to use for inference.
 
     Returns:
         state: Dict containing outputs of all pipeline steps.
@@ -431,7 +434,7 @@ def run_pipeline(
                     state.update(step7_train(project_root))
 
             elif step_num == 8:
-                state.update(step8_infer(project_root, state, target_date, target_hour, top_k))
+                state.update(step8_infer(project_root, state, target_date, target_hour, top_k, ckpt_dir))
 
         except Exception as exc:
             logger.error(f"Step {step_num} FAILED: {exc}")
@@ -515,6 +518,10 @@ def _parse_args() -> argparse.Namespace:
         "--skip-features", action="store_true",
         help="Skip validation + ingest + feature engineering and use existing features_row_level.parquet."
     )
+    parser.add_argument(
+        "--ckpt-dir", type=str, default=None,
+        help="Explicit checkpoint directory to load for inference."
+    )
     return parser.parse_args()
 
 
@@ -528,4 +535,5 @@ if __name__ == "__main__":
         skip_training    = args.skip_training,
         skip_clustering  = args.skip_clustering,
         skip_features    = args.skip_features,
+        ckpt_dir         = args.ckpt_dir,
     )

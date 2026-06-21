@@ -229,9 +229,9 @@ def load_ranker(
             logger.info(f"  zone_stats computed from grid fallback: {len(zone_stats_df)} zones")
         pbar.update(1)
 
-        # Determine feature columns (same logic as train.py)
+        # Determine feature columns (from checkpoint features.yaml)
         pbar.set_description("Building feature list")
-        feature_cols = _get_feature_cols(time_resolution_eff, zone_grid_df)
+        feature_cols = _get_feature_cols(time_resolution_eff, ckpt_dir)
         pbar.update(1)
 
     logger.info(
@@ -261,13 +261,22 @@ def _load_label_encoders(project_root: Path) -> dict:
     return {}
 
 
-# ── Feature column builder (single source of truth in src/data/features.py) ──
-# Previously 9 features missing vs train.py (I-5/I-6 — fixes train/inference mismatch).
-from src.data.features import get_feature_cols as _get_feature_cols_impl
+# ── Feature column builder ──
 
-
-def _get_feature_cols(time_resolution: str, zone_grid_df: pd.DataFrame) -> list[str]:
-    """Delegate to single source of truth (fixes I-5/I-6). zone_grid_df kept for API compat."""
+def _get_feature_cols(time_resolution: str, ckpt_dir: Path) -> list[str]:
+    """Load exact feature list used during training from training_meta.json."""
+    import json
+    meta_path = ckpt_dir / "training_meta.json"
+    
+    if meta_path.exists():
+        with meta_path.open("r", encoding="utf-8") as f:
+            meta = json.load(f)
+        if "feature_cols" in meta and meta["feature_cols"]:
+            return meta["feature_cols"]
+            
+    # Fallback for old checkpoints that don't have feature_cols in training_meta.json
+    logger.warning("No feature_cols in training_meta.json, falling back to workspace defaults.")
+    from src.data.features import get_feature_cols as _get_feature_cols_impl
     return _get_feature_cols_impl(time_resolution)
 
 

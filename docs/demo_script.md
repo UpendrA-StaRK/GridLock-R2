@@ -66,7 +66,7 @@ and generates prioritized enforcement zone schedules by time of day.
 |---|---|---|
 | Count prediction (MAE) | **4.31** violations/zone/hour | 6.97 (naive mean) |
 | ML Lift | **+38.2%** over naive baseline | — |
-| Per-hour ranking (NDCG@10) | **1.000** | 0.873 (frequency table) |
+| Per-hour ranking (NDCG@10) | **0.894** | 0.873 (frequency table) |
 | Spearman ρ (rank correlation) | **0.522** | — |
 
 > "38.2% better count prediction means we can tell an officer 'send 2 officers' vs '5 officers'
@@ -187,7 +187,7 @@ and generates prioritized enforcement zone schedules by time of day.
 | **Feasibility** | End-to-end pipeline runs in 11s (inference-only mode). 6 trained models. 150 days of real Bengaluru police data. MAE=4.31 on unseen March–April test set. |
 | **Relevance** | Directly addresses reactive patrol problem. Output is officer-ready hourly zone schedule. CIS formula mirrors ASTraM's MoRTH Blackspot methodology — familiar to BTP judges. |
 | **Innovation** | CIS = violation density × junction weight. Per-hour NDCG (not aggregate). SHAP explainability gate. 24h live time-slider demo. PAI spatial validation. Cyclical temporal encoding. |
-| **Real-World Impact** | +38.2% count prediction improvement → right number of officers per zone. Per-hour NDCG 1.000 vs 0.873 baseline → right zone at right hour, not just right zone overall. |
+| **Real-World Impact** | +38.2% count prediction improvement → right number of officers per zone. Per-hour NDCG 0.894 vs 0.873 baseline → right zone at right hour, not just right zone overall. |
 
 ---
 

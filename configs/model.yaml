@@ -78,11 +78,6 @@ comparison_run_date: "2026-06-21"
 winner_mae: 4.3064
 winner_rmse: 10.0694
 winner_precision_at_10: 1.0000
-winner_checkpoint: "lightgbm_hour_20260620_104122"  # Pinned — v3.3 features (25 cols, inference fix)
-                                                     # Bug fix: unified get_feature_cols() restored 9 missing
-                                                     # inference features. month excluded per v3.0.
-                                                     # DO NOT change to a higher-timestamp checkpoint
-                                                     # unless you retrain on the current features.yaml.
 
 when_to_retrain_all:
   - "features.yaml changes (feature added/dropped)"
@@ -93,7 +88,7 @@ when_to_retrain_all:
 # ── Candidate Models ──────────────────────────────────────────────
 
 xgboost:
-  enabled: true
+  enabled: false
   class: XGBRegressor
   objective: reg:squarederror
   eval_metric: rmse
@@ -135,7 +130,7 @@ lightgbm:
     ~15-30s on i7-12700H.
 
 catboost:
-  enabled: true
+  enabled: false
   class: CatBoostRegressor
   loss_function: RMSE
   iterations: 300

@@ -293,6 +293,7 @@ def _save_checkpoint(
     configs: dict[str, Any],
     project_root: Path,
     zone_stats: "pd.DataFrame | None" = None,
+    feature_cols: list[str] | None = None,
 ) -> None:
     """Save model weights + all config copies + metrics to checkpoint dir."""
     import pickle
@@ -328,6 +329,7 @@ def _save_checkpoint(
         "model_name":        model_name,
         "time_resolution":   metrics.get("time_resolution"),
         "features_yaml_hash": configs["feat_hash"],
+        "feature_cols":      feature_cols,
         "seed":              configs["model"].get("seed", 42),
         "metrics":           metrics,
         "checkpoint_dir":    str(ckpt_dir),
@@ -657,7 +659,7 @@ def run_training(
         )
         _zone_stats["zone_cis_score"] = _zone_stats["zone_cis_score"].fillna(0.0)
 
-        _save_checkpoint(ckpt_dir, model, model_name, eval_result, configs, project_root, _zone_stats)
+        _save_checkpoint(ckpt_dir, model, model_name, eval_result, configs, project_root, _zone_stats, available_feature_cols)
 
         run_key = f"{model_name}_{time_resolution}"
         all_results[run_key] = eval_result
