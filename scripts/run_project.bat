@@ -18,8 +18,8 @@ if not exist venv\Scripts\activate.bat (
 
 echo [2/3] Activating venv and installing dependencies...
 call venv\Scripts\activate
-pip install --upgrade pip
-pip install -r requirements.txt
+pip install --upgrade pip --no-cache-dir
+pip install -r requirements.txt --no-cache-dir
 if %errorlevel% neq 0 (
     echo [ERROR] Failed to install dependencies.
     exit /b %errorlevel%

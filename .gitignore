@@ -48,3 +48,12 @@ Desktop.ini
 phase3_impact_summary.md
 
 docs/demo_script.md
+
+# Auto-generated and packaging files
+create_sub.py
+create_submission_zip.py
+generate_presentation.py
+inspect_pptx.py
+GridLock_R2_SourceCode.zip
+submission.zip
+GridLock_R2_Presentation.pptx

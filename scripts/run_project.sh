@@ -12,8 +12,8 @@ python3 -m venv venv || python -m venv venv
 
 echo "[2/3] Activating venv and installing dependencies..."
 source venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
+pip install --upgrade pip --no-cache-dir
+pip install -r requirements.txt --no-cache-dir
 
 echo "[3/3] Running End-to-End Pipeline (Training from Scratch)..."
 python -m src.data.pipeline
