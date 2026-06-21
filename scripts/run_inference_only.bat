@@ -1,4 +1,5 @@
 @echo off
+cd /d "%~dp0.."
 echo ========================================================
 echo GridLock R2 - Inference Only (Uses Existing Checkpoint)
 echo ========================================================
