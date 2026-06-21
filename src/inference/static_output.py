@@ -292,10 +292,8 @@ def _build_scorecard_html(
         {_bar(min(model_ph_ndcg, 1.0), colour=ph_colour)}
         <div class='score-sub' style='font-size:12px;color:#2c3e50;margin-top:6px'>
           <b style='color:{ph_colour}'>{beats_label}</b> &nbsp;·&nbsp;
-          {model_name.upper()} zones ranking beats pure frequency baseline by
-          <b>{delta_pct:+.1f}%</b> per-hour NDCG
-          ({model_ph_ndcg:.3f} vs {baseline_ph_ndcg:.3f}) —
-          <i>ML adds time-aware enforcement intelligence that a static lookup table cannot.</i>
+          <b>{delta_pct:+.1f}%</b> vs static lookup table.
+          <i>ML adds time-aware enforcement intelligence.</i>
         </div>
       </div>"""
 
