@@ -11,8 +11,8 @@
 # ── Split Boundaries ──────────────────────────────────────────────
 split:
   train_start: "2023-11-09"   # Actual first date in dataset (not Nov 01)
-  train_end:   "2024-02-29"
-  test_start:  "2024-03-01"
+  train_end:   "2024-02-22"
+  test_start:  "2024-02-23"
   test_end:    "2024-04-08"   # Actual last date in dataset (NOT Apr 30)
   timezone: "UTC"
   leakage_guard: >

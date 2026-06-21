@@ -194,19 +194,26 @@ def run_clustering(
 
     df = df.copy()
 
-    with tqdm(total=3, desc="DBSCAN clustering", unit="step", leave=True) as pbar:
+    with tqdm(total=4, desc="DBSCAN clustering", unit="step", leave=True) as pbar:
+
+        pbar.set_description("Extracting unique coordinates")
+        coords = df[[lat_col, lon_col]].values
+        unique_coords, inverse_indices, counts = np.unique(coords, axis=0, return_inverse=True, return_counts=True)
+        pbar.update(1)
 
         pbar.set_description("Scaling coordinates")
         scaler = StandardScaler()
-        coords_scaled = scaler.fit_transform(df[[lat_col, lon_col]].values)
+        unique_scaled = scaler.fit_transform(unique_coords)
         pbar.update(1)
 
         pbar.set_description("Fitting DBSCAN")
         db = DBSCAN(eps=eps, min_samples=min_samples, n_jobs=None)
-        labels = db.fit_predict(coords_scaled)
+        db.fit(unique_scaled, sample_weight=counts)
+        labels_unique = db.labels_
         pbar.update(1)
 
         pbar.set_description("Assigning zone_id")
+        labels = labels_unique[inverse_indices]
         df["zone_id"] = labels.astype("int32")
         pbar.update(1)
 
@@ -219,6 +226,7 @@ def run_clustering(
     sil = float("nan")
     if n_clusters >= 2 and non_noise_mask.sum() >= 2:
         try:
+            coords_scaled = unique_scaled[inverse_indices]
             sil = silhouette_score(
                 coords_scaled[non_noise_mask],
                 labels[non_noise_mask],
