@@ -252,9 +252,9 @@ def load_raw(
     # Row counts by split window (informational — actual split done in train.py)
     if "created_datetime" in df.columns:
         split = eval_cfg.get("split", {})
-        train_end = pd.Timestamp(split.get("train_end", "2024-02-29"), tz="UTC")
-        test_start = pd.Timestamp(split.get("test_start", "2024-03-01"), tz="UTC")
-        test_end = pd.Timestamp(split.get("test_end", "2024-04-08"), tz="UTC")
+        train_end = pd.Timestamp(split["train_end"], tz="UTC")
+        test_start = pd.Timestamp(split["test_start"], tz="UTC")
+        test_end = pd.Timestamp(split["test_end"], tz="UTC")
 
         n_train = int((df["created_datetime"] <= train_end).sum())
         n_test = int(

@@ -27,15 +27,13 @@ import yaml
 from loguru import logger
 
 
-# ── Bengaluru geographic bounding box ────────────────────────────────────────
-# EDA-confirmed actual data bounds (eda_summary.json geo section):
-#   lat: [12.8027, 13.2937]  lon: [77.4426, 77.7717]
-# We add a small buffer (0.01°) on each side to tolerate minor GPS jitter.
-BENGALURU_BBOX: dict[str, float] = {
-    "lat_min": 12.79,
-    "lat_max": 13.30,
-    "lon_min": 77.43,
-    "lon_max": 77.78,
+# ── Universal geographic bounding box ────────────────────────────────────────
+# Validates standard GPS coordinates to support any city.
+UNIVERSAL_BBOX: dict[str, float] = {
+    "lat_min": -90.0,
+    "lat_max": 90.0,
+    "lon_min": -180.0,
+    "lon_max": 180.0,
 }
 
 # ── Expected column registry ─────────────────────────────────────────────────
@@ -127,8 +125,8 @@ def validate_schema(
         lat = pd.to_numeric(df["latitude"], errors="coerce")
         lon = pd.to_numeric(df["longitude"], errors="coerce")
 
-        lat_oob = ((lat < BENGALURU_BBOX["lat_min"]) | (lat > BENGALURU_BBOX["lat_max"])).sum()
-        lon_oob = ((lon < BENGALURU_BBOX["lon_min"]) | (lon > BENGALURU_BBOX["lon_max"])).sum()
+        lat_oob = ((lat < UNIVERSAL_BBOX["lat_min"]) | (lat > UNIVERSAL_BBOX["lat_max"])).sum()
+        lon_oob = ((lon < UNIVERSAL_BBOX["lon_min"]) | (lon > UNIVERSAL_BBOX["lon_max"])).sum()
         lat_null = lat.isna().sum()
         lon_null = lon.isna().sum()
 
@@ -144,18 +142,19 @@ def validate_schema(
             logger.error(f"Null coordinates — lat: {lat_null:,}, lon: {lon_null:,}")
         if lat_oob > 0:
             errors.append(
-                f"LATITUDE OUT OF BENGALURU BBOX: {lat_oob:,} rows outside "
-                f"[{BENGALURU_BBOX['lat_min']}, {BENGALURU_BBOX['lat_max']}]"
+                f"LATITUDE OUT OF VALID BOUNDS: {lat_oob:,} rows outside "
+                f"[{UNIVERSAL_BBOX['lat_min']}, {UNIVERSAL_BBOX['lat_max']}]"
             )
             logger.error(f"Latitude OOB: {lat_oob:,} rows")
         if lon_oob > 0:
             errors.append(
-                f"LONGITUDE OUT OF BENGALURU BBOX: {lon_oob:,} rows outside "
-                f"[{BENGALURU_BBOX['lon_min']}, {BENGALURU_BBOX['lon_max']}]"
+                f"LONGITUDE OUT OF VALID BOUNDS: {lon_oob:,} rows outside "
+                f"[{UNIVERSAL_BBOX['lon_min']}, {UNIVERSAL_BBOX['lon_max']}]"
             )
             logger.error(f"Longitude OOB: {lon_oob:,} rows")
         if lat_oob == 0 and lon_oob == 0 and lat_null == 0 and lon_null == 0:
-            logger.info("✓ All coordinates within Bengaluru bounding box")
+            logger.info("✓ All coordinates within valid GPS bounds")
+
 
     # ── 3. created_datetime parseable + range check ───────────────────────────
     if "created_datetime" in df.columns:
@@ -184,20 +183,6 @@ def validate_schema(
             dt_max = dt_series.max()
             stats["datetime_min"] = str(dt_min)
             stats["datetime_max"] = str(dt_max)
-
-            expected_min = pd.Timestamp("2023-11-09", tz="UTC")
-            expected_max = pd.Timestamp("2024-04-08 23:59:59", tz="UTC")
-
-            if dt_min < expected_min:
-                warnings.append(
-                    f"created_datetime min ({dt_min}) is earlier than expected ({expected_min})"
-                )
-                logger.warning(f"created_datetime min={dt_min} earlier than expected {expected_min}")
-            if dt_max > expected_max:
-                warnings.append(
-                    f"created_datetime max ({dt_max}) is later than expected ({expected_max})"
-                )
-                logger.warning(f"created_datetime max={dt_max} later than expected {expected_max}")
 
             logger.info(
                 f"✓ created_datetime range: {dt_min.date()} → {dt_max.date()} "
@@ -283,8 +268,8 @@ def validate_schema(
     # ── 8. Train / test split temporal guard ─────────────────────────────────
     if "created_datetime" in df.columns and eval_cfg:
         split = eval_cfg.get("split", {})
-        train_end = pd.Timestamp(split.get("train_end", "2024-02-29"), tz="UTC")
-        test_start = pd.Timestamp(split.get("test_start", "2024-03-01"), tz="UTC")
+        train_end = pd.Timestamp(split["train_end"], tz="UTC")
+        test_start = pd.Timestamp(split["test_start"], tz="UTC")
 
         dt_series = pd.to_datetime(df["created_datetime"], errors="coerce", utc=True).dropna()
 

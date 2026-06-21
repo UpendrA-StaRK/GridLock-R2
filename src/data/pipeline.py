@@ -294,7 +294,7 @@ def step8_infer(
 
 def run_pipeline(
     project_root: str | Path = ".",
-    target_date:  str = "2024-03-18",
+    target_date:  str | None = None,
     target_hour:  int = 9,
     top_k:        int = 10,
     skip_training: bool = False,
@@ -353,6 +353,61 @@ def run_pipeline(
         raise FileNotFoundError("No CSV found in data/raw/")
     cfg = {"raw_filename": raw_files[0].name}
     logger.info(f"Raw data file: {cfg['raw_filename']}")
+
+    # ── Dynamic Split Configuration ─────────────────────────────────────────
+    if not skip_features:  # Only auto-update if we are starting fresh from the raw file
+        logger.info("Auto-configuring train/test split dates from dataset...")
+        try:
+            import pandas as pd
+            import re
+            
+            df_dt = pd.read_csv(raw_files[0], usecols=["created_datetime"], low_memory=False)
+            dt_series = pd.to_datetime(df_dt["created_datetime"], errors="coerce", utc=True).dropna()
+            
+            if not dt_series.empty:
+                dt_min = dt_series.min()
+                dt_max = dt_series.max()
+                total_days = (dt_max - dt_min).days
+                
+                # 70% Train / 30% Test split
+                train_days = int(total_days * 0.70)
+                train_end_dt = dt_min + pd.Timedelta(days=train_days)
+                test_start_dt = train_end_dt + pd.Timedelta(days=1)
+                
+                split_cfg = {
+                    "train_start": dt_min.strftime("%Y-%m-%d"),
+                    "train_end": train_end_dt.strftime("%Y-%m-%d"),
+                    "test_start": test_start_dt.strftime("%Y-%m-%d"),
+                    "test_end": dt_max.strftime("%Y-%m-%d")
+                }
+                
+                logger.info(f"Detected dataset range: {split_cfg['train_start']} to {split_cfg['test_end']}")
+                logger.info(f"Computed Split -> Train: up to {split_cfg['train_end']} | Test: from {split_cfg['test_start']}")
+                
+                # Update eval.yaml using regex to preserve comments
+                eval_yaml_path = project_root / "configs" / "eval.yaml"
+                with open(eval_yaml_path, "r", encoding="utf-8") as f:
+                    eval_content = f.read()
+                
+                eval_content = re.sub(r'train_start:\s*".*?"', f'train_start: "{split_cfg["train_start"]}"', eval_content)
+                eval_content = re.sub(r'train_end:\s*".*?"',   f'train_end:   "{split_cfg["train_end"]}"', eval_content)
+                eval_content = re.sub(r'test_start:\s*".*?"',  f'test_start:  "{split_cfg["test_start"]}"', eval_content)
+                eval_content = re.sub(r'test_end:\s*".*?"',    f'test_end:    "{split_cfg["test_end"]}"', eval_content)
+                
+                with open(eval_yaml_path, "w", encoding="utf-8") as f:
+                    f.write(eval_content)
+                
+                # Reload eval_cfg into memory since we just updated the file on disk
+                with open(eval_yaml_path, "r", encoding="utf-8") as f:
+                    eval_cfg = yaml.safe_load(f)
+            else:
+                logger.warning("Could not find valid dates to auto-configure split.")
+        except Exception as e:
+            logger.warning(f"Auto-split configuration failed: {e}")
+
+    if target_date is None:
+        target_date = eval_cfg.get("split", {}).get("test_start", "2024-03-01")
+        logger.info(f"No target_date provided. Defaulting to first test day: {target_date}")
 
     state: dict[str, Any] = {}
     total_steps = 8
@@ -495,8 +550,8 @@ def _parse_args() -> argparse.Namespace:
         description="GridLock R2 — End-to-End Pipeline (PS1: Parking-Induced Congestion)"
     )
     parser.add_argument(
-        "--date", default="2024-03-18",
-        help="Target date for inference output (YYYY-MM-DD). Default: 2024-03-18"
+        "--date", default=None,
+        help="Target date for inference output (YYYY-MM-DD). Default: test_start from eval.yaml"
     )
     parser.add_argument(
         "--hour", type=int, default=9,
