@@ -373,7 +373,7 @@ def load_eval_config(config_path: str | Path = "configs/eval.yaml") -> dict[str,
         )
     with path.open("r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
-    logger.info(f"Loaded eval config v{cfg.get('version', '?')} from '{path}'")
+    logger.info(f"Loaded eval config from '{path}'")
     return cfg
 
 

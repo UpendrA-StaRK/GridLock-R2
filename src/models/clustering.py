@@ -301,7 +301,7 @@ def compute_cis(
     """
     Compute the Congestion Impact Score (CIS) per zone.
 
-    Formula v1.0 (from configs/eval.yaml):
+    Formula (from configs/eval.yaml):
         CIS(zone) = violation_density_norm(zone) × junction_weight(zone)
 
     Where:
@@ -390,7 +390,7 @@ def compute_cis(
         labels=["LOW", "MEDIUM", "HIGH"],
     )
 
-    # Phase 3 addition: cis_score_norm — 0-1 normalized CIS score.
+    # Add cis_score_norm — 0-1 normalized CIS score.
     # Additive column only. cis_score (raw) is preserved unchanged.
     # cis_score_norm = cis_score / max(cis_score) across all zones.
     # Useful for interpretable display: "Zone X has CIS of 0.82 (82% of max impact)".

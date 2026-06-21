@@ -143,12 +143,12 @@ Open `data/outputs/enforcement_slider_<DATE>.html` in **Chrome** (works fully of
 
 | Metric | Expected value |
 |---|---|
-| Winner | XGBoost (hourly) |
-| MAE | ~4.48 violations/zone/hr |
-| RMSE | ~10.6 violations/zone/hr |
+| Winner | LightGBM (hourly) |
+| MAE | ~4.31 violations/zone/hr |
+| RMSE | ~10.07 violations/zone/hr |
 | Aggregate NDCG@10 | 1.000 (both model and baseline — see README for explanation) |
-| Per-hour NDCG@10 | ~0.89 |
-| Spearman ρ | ~0.52 |
+| Per-hour NDCG@10 | ~1.000 |
+| Spearman ρ | ~0.60 |
 | ML lift over naive baseline | ~+35% on MAE |
 | SHAP Gate 1 (no zone_id in top-5) | PASS |
 | SHAP Gate 2 (rolling_7d_count in top-3) | PASS |
@@ -185,7 +185,6 @@ If your numbers differ significantly, check:
 | Zone×hour training grid | `data/processed/zone_hour_grid.parquet` |
 | CIS lookup table | `data/processed/cis_table.parquet` |
 | Label encoders | `data/processed/label_encoders.pkl` |
-| Winning checkpoint | `checkpoints/xgboost_hour_<latest_timestamp>/` |
+| Winning checkpoint | `checkpoints/lightgbm_hour_<latest_timestamp>/` |
 | Demo HTML map | `data/outputs/enforcement_slider_<DATE>.html` |
 | Session log | `artifacts/session_log.md` |
-| AI context file | `claude.md` / `AGENTS.md` |

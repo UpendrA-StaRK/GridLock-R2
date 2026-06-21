@@ -2,9 +2,9 @@
 src/data/features.py
 GridLock R2 — PS1: Parking-Induced Congestion
 
-Feature engineering pipeline. Two phases:
+Feature engineering pipeline. Two steps:
 
-  Phase A — extract_row_features(df):
+  Step 1 — extract_row_features(df):
     Operates on the clean DataFrame from load.py (268k rows, 12 cols).
     Produces one row per violation event with all ML-ready features except zone_id.
     Steps:
@@ -15,13 +15,13 @@ Feature engineering pipeline. Two phases:
       5. LabelEncode: violation_type_primary, vehicle_type, police_station, center_code
       6. Save label encoders to data/processed/label_encoders.pkl
 
-  Phase B — aggregate_to_zone_grid(df_with_zones, time_resolution):
+  Step 2 — aggregate_to_zone_grid(df_with_zones, time_resolution):
     Called AFTER clustering.py assigns zone_id via DBSCAN.
     Aggregates to zone × time-block grid and produces the regression target.
     time_resolution: 'hour' or 'day'
 
 Pipeline protocol:
-  - Called from notebooks/01_eda.ipynb (Phase A) and later notebooks (Phase B).
+  - Called from notebooks/01_eda.ipynb and later notebooks.
   - Never hardcode feature names — always read from configs/features.yaml.
   - Save label encoders alongside data so inference can load them without re-fitting.
 """
@@ -84,7 +84,7 @@ def features_yaml_hash(config_path: str | Path = "configs/features.yaml") -> str
     return h.hexdigest()
 
 
-# ── Phase A: Row-level feature extraction ────────────────────────────────────
+# ── Row-level feature extraction ──────────────────────────────────────────────
 
 def extract_row_features(
     df: pd.DataFrame,
@@ -221,7 +221,7 @@ def extract_row_features(
     return df, encoders, metadata
 
 
-# ── Phase B: Zone × time-block aggregation ────────────────────────────────────
+# ── Zone × time-block aggregation ─────────────────────────────────────────────
 
 def aggregate_to_zone_grid(
     df: pd.DataFrame,
@@ -310,10 +310,10 @@ def aggregate_to_zone_grid(
             "fraction_at_junction":           ("is_at_junction", "mean"),
             "dominant_violation_type":        ("violation_type_primary_encoded", _mode),
             "dominant_vehicle_type":          ("vehicle_type_encoded", _mode),
-            # Phase 1: add mode-encoded categoricals directly (for train.py feature list)
+            # Add mode-encoded categoricals directly
             "violation_type_primary_encoded": ("violation_type_primary_encoded", _mode),
             "vehicle_type_encoded":           ("vehicle_type_encoded", _mode),
-            # Phase 1: police_station_id and center_code_encoded are kept in the grid
+            # police_station_id and center_code_encoded are kept in the grid
             # for reference/backward-compatibility but are NOT in train.py's feature list.
             "police_station_id":              ("police_station_id", _mode),
             "center_code_encoded":            ("center_code_encoded", _mode),
@@ -446,13 +446,13 @@ def get_feature_cols(
     """
     cols: list[str] = []
 
-    # Temporal — cyclical encoding (Phase 3 / v2.1); month EXCLUDED (v3.0)
+    # Temporal — cyclical encoding
     if time_resolution == "hour":
         cols += ["hour_sin", "hour_cos"]
     cols += ["dow_sin", "dow_cos", "is_weekend", "week_of_year", "quarter",
              "is_month_start", "is_month_end"]
 
-    # Zone aggregate features (Phase 1)
+    # Zone aggregate features
     cols += [
         "zone_mean_count", "zone_median_count", "zone_cis_score",
         "zone_junction_frac", "zone_total_count", "peak_hour_flag",

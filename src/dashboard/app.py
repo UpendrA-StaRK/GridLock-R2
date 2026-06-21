@@ -2,7 +2,7 @@
 src/dashboard/app.py
 GridLock R2 — PS1: Parking-Induced Congestion
 
-Phase 5: Interactive Streamlit Dashboard
+Interactive Streamlit Dashboard
 
 Run with:
     streamlit run src/dashboard/app.py

@@ -6,11 +6,11 @@ End-to-end orchestrator. Runs all 8 pipeline steps in sequence:
 
   Step 1: Schema validation     (src/data/validate.py)
   Step 2: Data ingest           (src/data/load.py)
-  Step 3: Feature engineering   (src/data/features.py — Phase A)
+  Step 3: Feature engineering   (src/data/features.py)
   Step 4: DBSCAN clustering     (src/models/clustering.py)
   Step 5: CIS computation       (src/models/clustering.py)
-  Step 6: Zone-grid aggregation (src/data/features.py — Phase B)
-  Step 7: Model training        (src/training/train.py)
+  Step 6: Zone-grid aggregation (src/data/features.py)
+  Step 7: Model Training        (src/training/train.py)
   Step 8: Inference / ranking   (src/inference/ranker.py + static_output.py)
 
 Usage:
@@ -71,7 +71,7 @@ def _step(name: str, step_num: int, total: int) -> None:
 
 def step1_validate(project_root: Path, cfg: dict[str, Any]) -> dict[str, Any]:
     """Step 1 — Schema validation."""
-    # FIX (Phase 0): correct function name is validate_schema, not validate_raw.
+    # Call validate_schema.
     # validate_schema(df, eval_cfg, strict=True) is the actual exported signature.
     from src.data.validate import validate_schema, load_eval_config, save_validation_report
 
@@ -90,7 +90,7 @@ def step1_validate(project_root: Path, cfg: dict[str, Any]) -> dict[str, Any]:
 
 def step2_ingest(project_root: Path, cfg: dict[str, Any]) -> dict[str, Any]:
     """Step 2 — Data ingestion + dedup."""
-    # FIX (Phase 0): load_raw() does not accept metadata_output_path kwarg.
+    # load_raw() loads data without metadata export.
     # Correct signature: load_raw(csv_path, eval_config_path, save_report, report_path)
     from src.data.load import load_raw, save_load_metadata
 
@@ -110,7 +110,7 @@ def step2_ingest(project_root: Path, cfg: dict[str, Any]) -> dict[str, Any]:
 
 
 def step3_features(project_root: Path, state: dict[str, Any]) -> dict[str, Any]:
-    """Step 3 — Row-level feature engineering (Phase A)."""
+    """Step 3 — Row-level feature engineering."""
     from src.data.features import extract_row_features, save_feature_metadata
 
     df = state["df"]
@@ -164,7 +164,7 @@ def step5_cis(project_root: Path, state: dict[str, Any], eval_cfg: dict[str, Any
 
 
 def step6_grids(project_root: Path, state: dict[str, Any]) -> dict[str, Any]:
-    """Step 6 — Zone × Hour and Zone × Day aggregation (Phase B)."""
+    """Step 6 — Zone × Hour and Zone × Day aggregation."""
     from src.data.features import aggregate_to_zone_grid
 
     df_zoned = state["df_zoned"]
@@ -180,17 +180,13 @@ def step6_grids(project_root: Path, state: dict[str, Any]) -> dict[str, Any]:
     return {"zone_hour_df": zone_hour_df, "zone_day_df": zone_day_df}
 
 
-def step7_train(project_root: Path) -> dict[str, Any]:
-    """Step 7 — Train all candidate models and select winner."""
-    from src.training.train import run_training
 
-    results = run_training(project_root=project_root)
-    winner  = results["winner"]
-    logger.info(
-        f"Training complete | Winner: {winner['run']} | "
-        f"NDCG@10={winner['NDCG@10']:.4f} | MAE={winner['MAE']:.4f}"
-    )
-    return {"training_results": results, "winner": winner}
+
+def step7_train(project_root: Path) -> dict[str, Any]:
+    """Step 7 — Train predictive models."""
+    from src.training.train import run_training
+    results = run_training(project_root)
+    return {"training_results": results, "winner": results.get("winner", {})}
 
 
 def step8_infer(
@@ -282,12 +278,11 @@ def run_pipeline(
     Steps:
       1. Schema validation
       2. Data ingest + dedup
-      3. Feature engineering (Phase A — row level)
+      3. Feature engineering (row level)
       4. DBSCAN clustering → zone_id assignment
       5. CIS computation per zone
-      6. Zone × Hour + Zone × Day grid aggregation (Phase B)
-      7. Model training (XGBoost / LightGBM / CatBoost, winner by NDCG@10)
-      8. Inference → top-K enforcement ranking + static HTML + day schedule
+      6. Zone × Hour + Zone × Day grid aggregation
+      7. Inference → top-K enforcement ranking + static HTML + day schedule
 
     Args:
         project_root:    Project root directory (GridLock R2/).
@@ -403,7 +398,7 @@ def run_pipeline(
 
             elif step_num == 7:
                 if skip_training:
-                    logger.info("Skipping Step 7 (skip_training=True) — using existing checkpoint")
+                    logger.info("Skipping Step 7 (skip_training=True) — using existing checkpoints")
                 else:
                     state.update(step7_train(project_root))
 
@@ -480,7 +475,7 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--skip-training", action="store_true",
-        help="Skip model training and use the existing checkpoint."
+        help="Skip model training and use existing checkpoint."
     )
     parser.add_argument(
         "--skip-clustering", action="store_true",

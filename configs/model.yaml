@@ -71,12 +71,12 @@ model_comparison:
 # Set this after the one-time comparison run. Everything after uses this only.
 # Rerun all three ONLY if: features change significantly, DBSCAN zones rebuild,
 # or a new candidate model is added to this file.
-primary_model: "lightgbm"        # Updated 2026-06-20: LightGBM won v3.3 (MAE 4.5748, NDCG 1.0000)
+primary_model: "lightgbm"        # Updated 2026-06-21: LightGBM Tweedie 1.8 won (MAE 4.3064, NDCG 0.8942)
 primary_time_resolution: "hour"  # hour resolution wins across all models
-winner_ndcg_at_10: 1.000000
-comparison_run_date: "2026-06-20"
-winner_mae: 4.5748
-winner_rmse: 9.9701
+winner_ndcg_at_10: 0.8942
+comparison_run_date: "2026-06-21"
+winner_mae: 4.3064
+winner_rmse: 10.0694
 winner_precision_at_10: 1.0000
 winner_checkpoint: "lightgbm_hour_20260620_104122"  # Pinned — v3.3 features (25 cols, inference fix)
                                                      # Bug fix: unified get_feature_cols() restored 9 missing
@@ -115,7 +115,8 @@ xgboost:
 lightgbm:
   enabled: true
   class: LGBMRegressor
-  objective: regression
+  objective: tweedie
+  tweedie_variance_power: 1.8
   metric: rmse
   n_estimators: 300
   learning_rate: 0.05
@@ -180,6 +181,58 @@ catboost_poisson:
     loss_function: Poisson
   expected_impact: RMSE reduction 5-15% (same rationale as xgboost_poisson)
   experiment_date: "2026-06-19"
+
+xgboost_categorical:
+  base: xgboost
+  changes:
+    enable_categorical: true
+    cast_categorical: true
+  expected_impact: 1-5% RMSE reduction by removing ordinal assumptions
+  experiment_date: "2026-06-21"
+
+lightgbm_categorical:
+  base: lightgbm
+  changes:
+    cast_categorical: true
+  expected_impact: 1-5% RMSE reduction by removing ordinal assumptions
+  experiment_date: "2026-06-21"
+
+catboost_categorical:
+  base: catboost
+  changes:
+    cast_categorical: true
+  expected_impact: 1-5% RMSE reduction by removing ordinal assumptions
+  experiment_date: "2026-06-21"
+
+xgboost_tweedie_12:
+  base: xgboost
+  changes: { objective: "reg:tweedie", tweedie_variance_power: 1.2 }
+xgboost_tweedie_15:
+  base: xgboost
+  changes: { objective: "reg:tweedie", tweedie_variance_power: 1.5 }
+xgboost_tweedie_18:
+  base: xgboost
+  changes: { objective: "reg:tweedie", tweedie_variance_power: 1.8 }
+
+lightgbm_tweedie_12:
+  base: lightgbm
+  changes: { objective: "tweedie", tweedie_variance_power: 1.2 }
+lightgbm_tweedie_15:
+  base: lightgbm
+  changes: { objective: "tweedie", tweedie_variance_power: 1.5 }
+lightgbm_tweedie_18:
+  base: lightgbm
+  changes: { objective: "tweedie", tweedie_variance_power: 1.8 }
+
+catboost_tweedie_12:
+  base: catboost
+  changes: { loss_function: "Tweedie:variance_power=1.2" }
+catboost_tweedie_15:
+  base: catboost
+  changes: { loss_function: "Tweedie:variance_power=1.5" }
+catboost_tweedie_18:
+  base: catboost
+  changes: { loss_function: "Tweedie:variance_power=1.8" }
 
 # ── Additional Candidates (run if above three are insufficient) ────
 # Add any new model here before training — never add mid-experiment.

@@ -152,7 +152,7 @@ def _build_variant_model(
 # ── Main experiment entry point ────────────────────────────────────────────────
 
 # Variants to run — these must exist in model.yaml experiment section
-EXPERIMENT_VARIANTS = ["xgboost_poisson", "catboost_poisson"]
+EXPERIMENT_VARIANTS = ["xgboost_categorical", "lightgbm_categorical", "catboost_categorical"]
 
 
 def run_experiments(
@@ -233,21 +233,8 @@ def run_experiments(
     train_df = _add_cyclical_temporal_features(train_df)
     test_df  = _add_cyclical_temporal_features(test_df)
 
-    # Build feature matrix
-    available_cols = [c for c in feature_cols if c in train_df.columns]
-    missing_cols   = [c for c in feature_cols if c not in train_df.columns]
-    if missing_cols:
-        logger.warning(f"Feature columns not found in {grid_file}: {missing_cols} — skipping.")
-
-    X_train = train_df[available_cols].fillna(-1)
     y_train = train_df[target_col].astype(float)
-    X_val   = test_df[available_cols].fillna(-1)
     y_val   = test_df[target_col].astype(float)
-
-    logger.info(
-        f"X_train: {X_train.shape}  y_train mean={y_train.mean():.2f} max={y_train.max():.0f}\n"
-        f"X_val:   {X_val.shape}    y_val mean={y_val.mean():.2f} max={y_val.max():.0f}"
-    )
 
     # ── Run each variant ──────────────────────────────────────────────────────
     experiment_results: dict[str, Any] = {}
@@ -257,6 +244,25 @@ def run_experiments(
 
         # Resolve variant config
         base_name, merged_cfg = _resolve_variant_config(model_cfg, variant_key)
+
+        # Build feature matrices
+        available_cols = [c for c in feature_cols if c in train_df.columns]
+        missing_cols   = [c for c in feature_cols if c not in train_df.columns]
+        if missing_cols:
+            logger.warning(f"Feature columns not found: {missing_cols} — skipping.")
+
+        X_train = train_df[available_cols].fillna(-1)
+        X_val   = test_df[available_cols].fillna(-1)
+
+        # Handle categoricals
+        X_train_var = X_train.copy()
+        X_val_var = X_val.copy()
+        if merged_cfg.get("cast_categorical", False):
+            cat_cols = features_cfg.get("categorical", [])
+            for col in cat_cols:
+                if col in X_train_var.columns:
+                    X_train_var[col] = X_train_var[col].astype("category")
+                    X_val_var[col] = X_val_var[col].astype("category")
 
         # Build model with overridden params
         model = _build_variant_model(base_name, merged_cfg, model_cfg, seed)
@@ -269,12 +275,12 @@ def run_experiments(
             leave=False,
         ) as pbar:
             model, eval_history = _train_one(
-                base_name, model, X_train, y_train, X_val, y_val
+                base_name, model, X_train_var, y_train, X_val_var, y_val
             )
             pbar.update(1)
 
         # Predict (clip negatives — Poisson objectives can produce tiny negatives at boundary)
-        y_pred = model.predict(X_val)
+        y_pred = model.predict(X_val_var)
         y_pred = np.clip(y_pred, 0, None)
 
         # Full evaluation

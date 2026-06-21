@@ -11,12 +11,12 @@ Functions:
     compute_relevance()               → Assign graded relevance labels to zones
     frequency_baseline()              → Rank zones by historical count × CIS (no ML)
     full_eval()                       → Run all metrics and return structured dict
-    ndcg_per_hour()                   → PHASE 2: Per-hour NDCG@K (primary differentiation metric)
-    temporal_rank_delta()             → PHASE 2: Per-hour Spearman rank correlation
-    precision_per_hour()              → PHASE 2: Per-hour Precision@K
-    frequency_baseline_per_hour()     → PHASE 2: Per-hour NDCG@K for the static frequency baseline
-    prediction_accuracy_index()       → PHASE 3: PAI — spatial gold-standard metric for police analytics
-    per_class_violation_type_breakdown() → PHASE 4: Per-violation-type spatial coverage breakdown
+    ndcg_per_hour()                   → Per-hour NDCG@K (primary differentiation metric)
+    temporal_rank_delta()             → Per-hour Spearman rank correlation
+    precision_per_hour()              → Per-hour Precision@K
+    frequency_baseline_per_hour()     → Per-hour NDCG@K for the static frequency baseline
+    prediction_accuracy_index()       → PAI — spatial gold-standard metric for police analytics
+    per_class_violation_type_breakdown() → Per-violation-type spatial coverage breakdown
                                            (AGENTS.md mandate: per-class metrics for WRONG PARKING dominance)
 
 Rules (from claude.md):
@@ -431,7 +431,7 @@ def full_eval(
             f"{'NDCG' if not beats_baseline_ndcg else 'Precision'}."
         )
 
-    # 10. Per-hour ranking metrics (Phase 2) — the primary differentiation signal
+    # 10. Per-hour ranking metrics — the primary differentiation signal
     # Aggregate NDCG@10=1.0 for both model and baseline is uninformative.
     # Per-hour NDCG shows whether the model predicts WHICH ZONES ARE HOTTEST AT
     # SPECIFIC HOURS, which is the actual downstream use case.
@@ -472,7 +472,7 @@ def full_eval(
         f"  Ranking — Aggregate (test set):\n"
         f"    NDCG@10     : {ndcg10:.4f}  (freq-baseline: {b_ndcg:.4f})\n"
         f"    Prec@10     : {prec10:.4f}  (freq-baseline: {b_prec:.4f})\n"
-        f"  Ranking — Per-hour [PRIMARY METRIC] (Phase 2):\n"
+        f"  Ranking — Per-hour [PRIMARY METRIC]:\n"
         f"    NDCG@10 mean: {per_hour_ndcg['mean_ndcg']:.4f}  "
         f"(baseline: {baseline_per_hour_ndcg['mean_ndcg']:.4f})  "
         f"{'[ML WINS]' if beats_baseline_per_hour_ndcg else '[BASELINE WINS]'}\n"
@@ -486,7 +486,7 @@ def full_eval(
         f"{'─'*58}"
     )
 
-    # Phase 3 addition — PAI (Prediction Accuracy Index)
+    # PAI (Prediction Accuracy Index)
     # Standard spatial validation metric for police analytics.
     # PAI > 1.0 means the model is better than random; PAI = 4.0 means top-K
     # zones cover X% of zone space but capture 4X% of all actual violations.
@@ -511,7 +511,7 @@ def full_eval(
             "ndcg":      beats_baseline_ndcg,
             "precision": beats_baseline_prec,
         },
-        # Phase 2 additions — per-hour ranking (primary differentiation metrics)
+        # Per-hour ranking (primary differentiation metrics)
         "ranking_per_hour": {
             "model_ndcg":    per_hour_ndcg,
             "model_spearman": per_hour_spearman,
@@ -519,9 +519,9 @@ def full_eval(
             "baseline_ndcg": baseline_per_hour_ndcg,
             "beats_baseline_per_hour_ndcg": beats_baseline_per_hour_ndcg,
         },
-        # Phase 3 addition — PAI
+        # PAI
         "spatial_pai": pai_results,
-        # Phase 4 addition — Per-class violation type spatial coverage breakdown
+        # Per-class violation type spatial coverage breakdown
         # (AGENTS.md mandate: per-class metrics for WRONG PARKING dominance)
         "per_class_violation_type": per_class_violation_type_breakdown(
             test_df=test_df,
@@ -557,7 +557,7 @@ def save_eval_results(
     logger.info(f"Eval results saved → '{out}'")
 
 
-# ── Per-hour ranking metrics (Phase 2) ────────────────────────────────────────
+# ── Per-hour ranking metrics ──────────────────────────────────────────────────
 # These replace the aggregate NDCG@10=1.0 metric (which was meaningless — both
 # model and baseline scored 1.0). Per-hour ranking differentiates the ML model
 # from a static frequency table: zone 2 may be #1 overall but should rank lower
@@ -894,7 +894,7 @@ def frequency_baseline_per_hour(
     return result
 
 
-# ── Prediction Accuracy Index (PAI) — Phase 3 ────────────────────────────────
+# ── Prediction Accuracy Index (PAI) ───────────────────────────────────────────
 # PAI is the standard spatial validation metric in police enforcement analytics.
 # It answers: "Does our model identify the places where violations actually happen,
 # at a rate better than random?"

@@ -250,7 +250,7 @@ def _build_scorecard_html(
             f"</div>"
         )
 
-    # PAI block — Phase 3 addition (backward-compatible: absent if not in eval_metrics)
+    # PAI block (backward-compatible: absent if not in eval_metrics)
     pai_data = eval_metrics.get("spatial_pai", {})
     pai_block = ""
     if pai_data and pai_data.get("pai", 0.0) > 0:
@@ -518,9 +518,9 @@ def generate_static_output(
     <div class="card-body">
       {table_html}
       <div class="formula-box">
-        <strong>Ranker formula v1.0:</strong>
+        <strong>Ranker formula:</strong>
         priority_score(zone, t) = predicted_violation_count(zone, t) × CIS(zone)<br>
-        <strong>CIS formula v1.0:</strong>
+        <strong>CIS formula:</strong>
         CIS(zone) = violation_density_norm(zone) × junction_weight (1.5 at junction, 1.0 otherwise)
       </div>
     </div>
@@ -542,7 +542,7 @@ def generate_static_output(
     return out
 
 
-# ── Time-slider output generator (Phase 5) ────────────────────────────────────
+# ── Time-slider output generator ──────────────────────────────────────────────
 
 def generate_static_output_with_slider(
     all_dates_hours_data: dict[str, dict[int, pd.DataFrame]],
@@ -554,7 +554,7 @@ def generate_static_output_with_slider(
     eval_metrics: dict | None = None,
 ) -> Path:
     """
-    Phase 5: Generate a self-contained HTML file with a 24-hour interactive time slider.
+    Generate a self-contained HTML file with a 24-hour interactive time slider.
 
     The slider updates zone markers and the priority table in real-time (JavaScript,
     no server required). All 24 hours of ranking data are embedded as a JSON object.

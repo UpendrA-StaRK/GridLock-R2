@@ -80,14 +80,14 @@ from src.data.features import get_feature_cols as _get_feature_cols_impl
 
 def _get_feature_cols(features_cfg: dict[str, Any], time_resolution: str) -> list[str]:
     """Thin wrapper: delegates to src.data.features.get_feature_cols (single source of truth)."""
-    return _get_feature_cols_impl(time_resolution)  # month excluded at features.py level (v3.0)
+    return _get_feature_cols_impl(time_resolution)  # month intentionally excluded
 
 
 def _add_cyclical_temporal_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     Add cyclical sin/cos encoding for hour_of_day and day_of_week.
 
-    Phase 3 (v2.1): Replaces raw integer features with 2D circular representations
+    Cyclical features: Replaces raw integer features with 2D circular representations
     so that hour 23 ≈ hour 0 in feature space ("midnight paradox" fix).
 
     Formula:
@@ -134,7 +134,7 @@ def _add_zone_aggregate_features(
     cis_df: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Phase 1: Compute zone aggregate statistics from training data ONLY,
+    Compute zone aggregate statistics from training data ONLY,
     then join them to both train and test DataFrames.
 
     Zone aggregates replace zone_id (which was being used as a numeric ordinal —
@@ -356,6 +356,8 @@ def _build_xgboost(model_cfg: dict[str, Any], seed: int) -> Any:
         reg_alpha           = xgb_cfg.get("reg_alpha",         0.1),
         reg_lambda          = xgb_cfg.get("reg_lambda",        1.0),
         n_jobs              = xgb_cfg.get("n_jobs",            4),   # was -1; capped to avoid OOM on 16GB (I-4)
+        enable_categorical  = xgb_cfg.get("enable_categorical", False),
+        tweedie_variance_power = xgb_cfg.get("tweedie_variance_power", 1.5),
         random_state        = seed,
         early_stopping_rounds = xgb_cfg.get("early_stopping_rounds", 20),
         verbosity           = 0,
@@ -377,6 +379,7 @@ def _build_lightgbm(model_cfg: dict[str, Any], seed: int) -> Any:
         reg_alpha           = lgb_cfg.get("reg_alpha",         0.1),
         reg_lambda          = lgb_cfg.get("reg_lambda",        1.0),
         n_jobs              = lgb_cfg.get("n_jobs",            4),   # was -1; capped to avoid OOM on 16GB (I-4)
+        tweedie_variance_power = lgb_cfg.get("tweedie_variance_power", 1.5),
         random_state        = seed,
         verbose             = -1,
     )
@@ -450,9 +453,11 @@ def _train_one(
                     f"final_val_rmse={eval_history.get('rmse', [float('nan')])[-1]:.4f}")
 
     elif model_name == "catboost":
+        cat_features = [col for col in X_train.columns if X_train[col].dtype.name == 'category']
         model.fit(
             X_train, y_train,
             eval_set=(X_val, y_val),
+            cat_features=cat_features if cat_features else None,
             verbose=False,
         )
         raw = model.get_evals_result()
@@ -565,13 +570,13 @@ def run_training(
         # Time-based split + leakage guard
         train_df, test_df = _split_data(df, eval_cfg)
 
-        # Phase 1: Add zone aggregate features (computed from training data ONLY,
+        # Add zone aggregate features (computed from training data ONLY,
         # then joined to both splits). This replaces zone_id as an ordinal feature.
         train_df, test_df = _add_zone_aggregate_features(
             train_df, test_df, target_col, cis_df
         )
 
-        # Phase 3 (v2.1): Add cyclical temporal features (hour_sin, hour_cos,
+        # Add cyclical temporal features (hour_sin, hour_cos,
         # dow_sin, dow_cos). Must be added after the split so that the raw
         # hour_of_day / day_of_week columns in the parquet are still usable.
         # The raw integer columns (hour_of_day, day_of_week) remain in the

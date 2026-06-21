@@ -1,4 +1,4 @@
-﻿# GridLock R2 — Session Log
+# GridLock R2 — Session Log
 **Living document. Updated after every pipeline step. Newest entry at the bottom.**
 **Canonical path: `artifacts/session_log.md`**
 
@@ -856,3 +856,7 @@ The model.yaml discrepancy (`primary_model: xgboost`) is a silent demo-blocker t
 [2026-06-20] [Antigravity Gemini] [STEP: Metric Timeline] Added metric history timeline to track progress from v1 to v3.2. Retracted the L1/Poisson MAE hack as mathematically flawed for count data. Final winner officially locked as LightGBM_hour (MAE 4.5793, NDCG@10 1.0000).
 [2026-06-20] [Antigravity Claude Sonnet 4.6 Thinking] [STEP: Pipeline Bug Fixes] Fixed 6 issues from final_review.md audit: (CRITICAL) unified get_feature_cols() into features.py � closes 9-feature train/inference mismatch; both train.py and ranker.py now import from single source of truth. (HIGH) n_jobs capped to 4 in XGBoost/LightGBM builders to prevent OOM on 16GB RAM. (MEDIUM) removed month from features.yaml temporal section (was listed in both temporal and excluded � contradiction). (LOW) added IQR+Z-score outlier logging to load.py; vectorized _impute_center_code in features.py (~100x faster). Retrain recommended.
 [2026-06-20] [Antigravity Claude Sonnet 4.6 Thinking] [STEP: v3.3 Winner Registered] Retrain 20260620_104122 confirmed new best: LightGBM hour MAE=4.5748 NDCG=1.0000 Precision@10=1.0000 RMSE=9.9701 (first below 10). Pinned winner_checkpoint in model.yaml. Added v3.3 row to docs/metric_evolution.md.
+
+[2026-06-21] [Antigravity Gemini 2.5 Pro] [STEP: Final Experiments (Cat, Tweedie, Lags)] Completed 3 ablation experiments. Exp 3 (Native Categoricals): CatBoost native handled them best (MAE 4.52, NDCG 0.89). Exp 1 (Tweedie Loss): LightGBM with Tweedie variance power 1.8 dominated (MAE 4.3064, per-hour NDCG 0.8942). Exp 2 (Calendar Lags): Exact lag_1d_count/lag_7d_count degraded metrics (injects high variance noise vs smoothed rolling average), confirming previous exclusions. Hurdle Model cancelled: Tweedie natively and elegantly handles the zero-inflated compound Poisson-Gamma distribution in a single step without architectural complexity. New champion promoted: lightgbm_tweedie_18.
+
+[2026-06-21] [Antigravity Gemini 2.5 Pro] [STEP: Experiment Cleanup] Totally removed the exact calendar lag feature experiment code from `src/data/features.py`, `src/training/experiment.py`, and `configs/model.yaml` to keep the codebase clean after hypothesis refutation. Deleted all one-off experiment notebooks (`07_experiments.ipynb`, `08_lag_features.ipynb`, `09_experiment_categoricals.ipynb`, `10_experiment_tweedie.ipynb`, `11_experiment_lags.ipynb`) as the optimal `lightgbm_tweedie_18` configuration is now officially the standard pipeline target.

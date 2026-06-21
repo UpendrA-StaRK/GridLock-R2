@@ -7,7 +7,7 @@ Enforcement Priority Ranker.
 Given a requested day and hour, loads the winning checkpoint, predicts violation
 counts for every zone, multiplies by CIS, and returns a ranked top-K table.
 
-Formula (configs/eval.yaml ranker v1.0):
+Formula (configs/eval.yaml):
     priority_score(zone, t) = predicted_count(zone, t) × CIS(zone)
 
 Usage (from notebooks/05_inference.ipynb):
@@ -118,24 +118,9 @@ def find_best_checkpoint(
 # ── Model loader ──────────────────────────────────────────────────────────────
 
 def _load_model(ckpt_dir: Path, model_name: str) -> Any:
-    """Load model weights from checkpoint directory."""
-    if model_name == "xgboost":
-        from xgboost import XGBRegressor
-        m = XGBRegressor()
-        m.load_model(str(ckpt_dir / "model.xgb"))
-        return m
-    elif model_name == "lightgbm":
-        import lightgbm as lgb
-        return lgb.Booster(model_file=str(ckpt_dir / "model.lgb"))
-    elif model_name == "catboost":
-        from catboost import CatBoostRegressor
-        m = CatBoostRegressor()
-        m.load_model(str(ckpt_dir / "model.cbm"))
-        return m
-    else:
-        import pickle
-        with open(ckpt_dir / "model.pkl", "rb") as f:
-            return pickle.load(f)
+    """Load model weights from checkpoint directory. Stripped down to LightGBM only for maximum reliability."""
+    import lightgbm as lgb
+    return lgb.Booster(model_file=str(ckpt_dir / "model.lgb"))
 
 
 def load_ranker(
@@ -333,7 +318,7 @@ def _build_zone_scaffold(
         scaffold = scaffold.merge(grid_medians, on="zone_id", how="left")
 
     # Override temporal features with the requested values.
-    # Phase 3 (v2.1): compute cyclical sin/cos from the requested date/hour.
+    # Compute cyclical sin/cos from the requested date/hour.
     # Raw hour_of_day and day_of_week are kept as intermediate values only.
     dow = int(target_date.dayofweek)
     scaffold["is_weekend"]  = int(dow >= 5)
@@ -372,7 +357,7 @@ def rank_zones(
     """
     Score all zones for a requested date/hour and return the top-K ranked table.
 
-    Formula (eval.yaml ranker v1.0):
+    Formula (eval.yaml):
         priority_score(zone, t) = predicted_count(zone, t) × CIS(zone)
 
     Args:
