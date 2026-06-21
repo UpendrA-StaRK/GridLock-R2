@@ -42,7 +42,7 @@
 
     .container { padding: 20px 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
     #map-container { background: white; padding: 12px; grid-column: 1 / 3; height: 500px; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); }
-    #leaflet-map { width: 100%; height: 100%; border-radius: 4px; }
+    #leaflet-map { width: 100%; height: 100%; }
     .card {
       background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
       overflow: hidden;
@@ -64,7 +64,7 @@
     .tier-LOW { color: #27ae60; font-weight: bold; }
 
     .scorecard-grid {
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; padding: 4px 0;
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; padding: 4px 0;
     }
     .score-block { background: #f8f9fa; border-radius: 8px; padding: 12px 14px; border: 1px solid #e8ecef; }
     .score-label { font-size: 10px; font-weight: 600; color: #7f8c8d; text-transform: uppercase; }
@@ -84,7 +84,7 @@
   </div>
   <div style="text-align:right">
     <div class="badge">DEMO — TIME SLIDER</div>
-    <p style="font-size:11px;color:#a0b4c8;margin-top:5px">2026-06-21 10:42 UTC</p>
+    <p style="font-size:11px;color:#a0b4c8;margin-top:5px" id="live-clock">Loading...</p>
   </div>
 </header>
 
@@ -127,36 +127,11 @@
         </div>
       </div>
       <div class='score-block'>
-        <div class='score-label'>RMSE (test)</div>
-        <div class='score-value'>10.069</div>
-        <div style='background:#eee;border-radius:4px;height:8px;margin:4px 0'><div style='background:#8e44ad;width:9.0%;height:100%;border-radius:4px'></div></div>
-        <div class='score-sub'>Model: LIGHTGBM | Res: hour</div>
-      </div>
-      <div class='score-block'>
-        <div class='score-label'>NDCG@10</div>
-        <div class='score-value' style='color:#e67e22'>1.0000</div>
-        <div style='background:#eee;border-radius:4px;height:8px;margin:4px 0'><div style='background:#e67e22;width:100.0%;height:100%;border-radius:4px'></div></div>
-        <div class='score-sub'>Freq baseline: 1.0000</div>
-      </div>
-      <div class='score-block'>
-        <div class='score-label'>Precision@10</div>
-        <div class='score-value' style='color:#e67e22'>1.0000</div>
-        <div style='background:#eee;border-radius:4px;height:8px;margin:4px 0'><div style='background:#e67e22;width:100.0%;height:100%;border-radius:4px'></div></div>
-        <div class='score-sub'>Freq baseline: 1.0000</div>
-      </div>
-      <div class='score-block'>
         <div class='score-label'>ML Lift vs Naive</div>
         <div class='score-value' style='color:#27ae60'>+38.2%</div>
         <div class='score-sub'>
           ✓ Beats naive predictor
         </div>
-      </div>
-      
-      <div class='score-block'>
-        <div class='score-label'>Spearman ρ</div>
-        <div class='score-value' style='color:#27ae60'>0.5342</div>
-        <div style='background:#eee;border-radius:4px;height:8px;margin:4px 0'><div style='background:#27ae60;width:53.4%;height:100%;border-radius:4px'></div></div>
-        <div class='score-sub'>Rank correlation vs actuals</div>
       </div>
       
       <div class='score-block' style='grid-column: 1 / -1; border-left: 4px solid #27ae60;'>
@@ -196,7 +171,7 @@
         <thead>
           <tr>
             <th>Rank</th><th>Zone ID</th><th>Priority</th>
-            <th>Score</th><th>Predicted Count</th><th>CIS</th><th>Junction</th>
+            <th>Predicted Count</th><th>CIS</th><th>Junction</th>
           </tr>
         </thead>
         <tbody id="zone-tbody"></tbody>
@@ -210,8 +185,8 @@
     <div class="card-body">
       <div class="scorecard-grid">
         <div class="score-block">
-          <div class="score-label">Predicted Violations (Hour)</div>
-          <div class="score-value" id="kpi-total">0</div>
+          <div class="score-label">Critical Junctions (High)</div>
+          <div class="score-value" id="kpi-total" style="color:#e74c3c">0</div>
         </div>
         <div class="score-block">
           <div class="score-label">Active Hotspots (High/Med)</div>
@@ -320,7 +295,6 @@ function updateDisplay() {
       <td>${z.rank}</td>
       <td>${z.zone_id}</td>
       <td class="tier-${z.priority_tier}">${z.priority_tier}</td>
-      <td>${z.priority_score.toFixed(4)}</td>
       <td>${z.predicted_count.toFixed(1)}</td>
       <td>${z.cis_score.toFixed(4)}</td>
       <td>${z.has_junction ? '✓' : '—'}</td>
@@ -368,7 +342,7 @@ function updateCharts(currentZones) {
   });
 
   // 2. KPIs for the current hour
-  const totalViolations = currentZones.reduce((sum, z) => sum + z.predicted_count, 0);
+  const criticalJunctions = currentZones.filter(z => z.priority_tier === 'HIGH').length;
   
   // High/Med hotspots
   const hotspots = currentZones.filter(z => z.priority_tier === 'HIGH' || z.priority_tier === 'MEDIUM');
@@ -377,7 +351,7 @@ function updateCharts(currentZones) {
     ? hotspots.reduce((sum, z) => sum + z.cis_score, 0) / hotspots.length 
     : 0;
 
-  document.getElementById('kpi-total').textContent = Math.round(totalViolations).toLocaleString();
+  document.getElementById('kpi-total').textContent = criticalJunctions;
   document.getElementById('kpi-hotspots').textContent = hotspots.length;
   document.getElementById('kpi-avg-cis').textContent = avgCis.toFixed(2);
   document.getElementById('kpi-hour-label').textContent = `Hour ${String(currentHour).padStart(2, '0')}:00`;
@@ -431,6 +405,13 @@ function setHour(h) {
 
 // ── Initial render ────────────────────────────────────────────────────────────
 updateDisplay();
+
+// Live Clock
+setInterval(() => {
+  const now = new Date();
+  const el = document.getElementById('live-clock');
+  if (el) el.innerText = now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+}, 1000);
 </script>
 
 </body>

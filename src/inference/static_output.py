@@ -176,7 +176,6 @@ def _build_table_html(top_k_df: pd.DataFrame) -> str:
           <td style='text-align:center;font-weight:bold'>{int(row.get('rank', rank+1))}</td>
           <td style='text-align:center'>{int(row['zone_id'])}</td>
           <td style='text-align:center;font-weight:bold;color:{colour}'>{tier}</td>
-          <td style='text-align:right'>{row['priority_score']:.4f}</td>
           <td style='text-align:right'>{row['predicted_count']:.1f}</td>
           <td style='text-align:right'>{row['cis_score']:.4f}</td>
           <td style='text-align:center'>{'✓' if row.get('has_junction') else '—'}</td>
@@ -190,7 +189,6 @@ def _build_table_html(top_k_df: pd.DataFrame) -> str:
             <th style='padding:8px'>Rank</th>
             <th style='padding:8px'>Zone ID</th>
             <th style='padding:8px'>Priority</th>
-            <th style='padding:8px'>Priority Score</th>
             <th style='padding:8px'>Predicted Count</th>
             <th style='padding:8px'>CIS Score</th>
             <th style='padding:8px'>Junction</th>
@@ -325,31 +323,12 @@ def _build_scorecard_html(
         </div>
       </div>
       <div class='score-block'>
-        <div class='score-label'>RMSE (test)</div>
-        <div class='score-value'>{rmse:.3f}</div>
-        {_bar(1 / (1 + rmse), colour="#8e44ad")}
-        <div class='score-sub'>Model: {model_name.upper()} | Res: {time_resolution}</div>
-      </div>
-      <div class='score-block'>
-        <div class='score-label'>NDCG@10</div>
-        <div class='score-value' style='color:{ndcg_colour}'>{ndcg10:.4f}</div>
-        {_bar(ndcg10, colour=ndcg_colour)}
-        <div class='score-sub'>Freq baseline: {b_ndcg10:.4f}</div>
-      </div>
-      <div class='score-block'>
-        <div class='score-label'>Precision@10</div>
-        <div class='score-value' style='color:{prec_colour}'>{prec10:.4f}</div>
-        {_bar(prec10, colour=prec_colour)}
-        <div class='score-sub'>Freq baseline: {b_prec10:.4f}</div>
-      </div>
-      <div class='score-block'>
         <div class='score-label'>ML Lift vs Naive</div>
         <div class='score-value' style='color:{lift_colour}'>{lift_pct:+.1f}%</div>
         <div class='score-sub'>
           {status_label}
         </div>
       </div>
-      {spearman_block}
       {pai_block}
       {per_hour_ndcg_block}
     </div>"""
@@ -447,7 +426,7 @@ def generate_static_output(
       padding: 10px 14px; margin-top: 12px; font-size: 13px; border-radius: 0 4px 4px 0;
     }}
     .scorecard-grid {{
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding: 4px 0;
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; padding: 4px 0;
     }}
     .score-block {{
       background: #f8f9fa; border-radius: 8px; padding: 14px 16px;
@@ -485,7 +464,7 @@ def generate_static_output(
   </div>
   <div>
     <div class="badge">DEMO OUTPUT</div>
-    <p style="font-size:12px;color:#a0b4c8;margin-top:6px">{generated_at}</p>
+    <p style="font-size:11px;color:#a0b4c8;margin-top:5px" id="live-clock">Loading...</p>
   </div>
 </header>
 
@@ -531,6 +510,14 @@ def generate_static_output(
 <footer>
   GridLock R2 — Bengaluru Parking Violation AI | Prototype Demo | Data: Jan–May 2024 Police Violations
 </footer>
+
+<script>
+setInterval(() => {{
+  const now = new Date();
+  const el = document.getElementById('live-clock');
+  if (el) el.innerText = now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+}}, 1000);
+</script>
 
 </body>
 </html>"""
@@ -665,7 +652,7 @@ def generate_static_output_with_slider(
     .time-icon:hover {{ background: #eaf4fd; }}
 
     .container {{ padding: 20px 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }}
-    #map-container {{ grid-column: 1 / 3; height: 500px; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.1); }}
+    #map-container {{ background: white; padding: 12px; grid-column: 1 / 3; height: 500px; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); }}
     #leaflet-map {{ width: 100%; height: 100%; }}
     .card {{
       background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
@@ -688,7 +675,7 @@ def generate_static_output_with_slider(
     .tier-LOW {{ color: #27ae60; font-weight: bold; }}
 
     .scorecard-grid {{
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; padding: 4px 0;
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; padding: 4px 0;
     }}
     .score-block {{ background: #f8f9fa; border-radius: 8px; padding: 12px 14px; border: 1px solid #e8ecef; }}
     .score-label {{ font-size: 10px; font-weight: 600; color: #7f8c8d; text-transform: uppercase; }}
@@ -708,7 +695,7 @@ def generate_static_output_with_slider(
   </div>
   <div style="text-align:right">
     <div class="badge">DEMO — TIME SLIDER</div>
-    <p style="font-size:11px;color:#a0b4c8;margin-top:5px">{generated_at}</p>
+    <p style="font-size:11px;color:#a0b4c8;margin-top:5px" id="live-clock">Loading...</p>
   </div>
 </header>
 
@@ -751,7 +738,7 @@ def generate_static_output_with_slider(
         <thead>
           <tr>
             <th>Rank</th><th>Zone ID</th><th>Priority</th>
-            <th>Score</th><th>Predicted Count</th><th>CIS</th><th>Junction</th>
+            <th>Predicted Count</th><th>CIS</th><th>Junction</th>
           </tr>
         </thead>
         <tbody id="zone-tbody"></tbody>
@@ -765,8 +752,8 @@ def generate_static_output_with_slider(
     <div class="card-body">
       <div class="scorecard-grid">
         <div class="score-block">
-          <div class="score-label">Predicted Violations (Hour)</div>
-          <div class="score-value" id="kpi-total">0</div>
+          <div class="score-label">Critical Junctions (High)</div>
+          <div class="score-value" id="kpi-total" style="color:#e74c3c">0</div>
         </div>
         <div class="score-block">
           <div class="score-label">Active Hotspots (High/Med)</div>
@@ -875,7 +862,6 @@ function updateDisplay() {{
       <td>${{z.rank}}</td>
       <td>${{z.zone_id}}</td>
       <td class="tier-${{z.priority_tier}}">${{z.priority_tier}}</td>
-      <td>${{z.priority_score.toFixed(4)}}</td>
       <td>${{z.predicted_count.toFixed(1)}}</td>
       <td>${{z.cis_score.toFixed(4)}}</td>
       <td>${{z.has_junction ? '✓' : '—'}}</td>
@@ -923,7 +909,7 @@ function updateCharts(currentZones) {{
   }});
 
   // 2. KPIs for the current hour
-  const totalViolations = currentZones.reduce((sum, z) => sum + z.predicted_count, 0);
+  const criticalJunctions = currentZones.filter(z => z.priority_tier === 'HIGH').length;
   
   // High/Med hotspots
   const hotspots = currentZones.filter(z => z.priority_tier === 'HIGH' || z.priority_tier === 'MEDIUM');
@@ -932,7 +918,7 @@ function updateCharts(currentZones) {{
     ? hotspots.reduce((sum, z) => sum + z.cis_score, 0) / hotspots.length 
     : 0;
 
-  document.getElementById('kpi-total').textContent = Math.round(totalViolations).toLocaleString();
+  document.getElementById('kpi-total').textContent = criticalJunctions;
   document.getElementById('kpi-hotspots').textContent = hotspots.length;
   document.getElementById('kpi-avg-cis').textContent = avgCis.toFixed(2);
   document.getElementById('kpi-hour-label').textContent = `Hour ${{String(currentHour).padStart(2, '0')}}:00`;
@@ -986,6 +972,13 @@ function setHour(h) {{
 
 // ── Initial render ────────────────────────────────────────────────────────────
 updateDisplay();
+
+// Live Clock
+setInterval(() => {{
+  const now = new Date();
+  const el = document.getElementById('live-clock');
+  if (el) el.innerText = now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+}}, 1000);
 </script>
 
 </body>
