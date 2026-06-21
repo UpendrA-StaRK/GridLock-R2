@@ -359,9 +359,9 @@ The dashboard is a single-page static HTML file (`docs/index.html`) divided into
 - **Header / Navbar:** Displays the project title, the current date being viewed, and a "DEMO — TIME SLIDER" badge.
 - **Time Slider & Date Picker:** The core interactive control. A dropdown allows switching between a generated 7-day schedule, and a range slider (0-23) allows scrubbing through the hours of the day.
 - **Interactive Map:** Powered by Leaflet.js. It renders Bengaluru map tiles and plots the top-10 enforcement zones as color-coded circle markers (Red=HIGH, Orange=MEDIUM, Green=LOW tier). Clicking a marker shows a popup with the zone's specific metrics.
-- **Model Evaluation Scorecard:** A static summary of the LightGBM model's performance metrics (MAE, RMSE, ML Lift %, NDCG@10) fetched from the pipeline evaluation logs.
-- **Zone Table:** A ranked tabular view of the top-10 enforcement zones for the selected hour. It shows Rank, Zone ID, Priority Tier, Predicted Count, and CIS Score.
-- **KPI Dashboard:** Three dynamic top-level numbers for the currently selected hour: Total Predicted Violations, Active Hotspots (High/Med tiers), and the Average CIS Score of those hotspots.
+- **Model Evaluation Scorecard:** A static summary of the LightGBM model's performance metrics (MAE, ML Lift %, PAI, Per-Hour NDCG) fetched from the pipeline evaluation logs.
+- **Zone Table:** A ranked tabular view of the top-10 enforcement zones for the selected hour. It shows Rank, Zone ID, Priority Tier, Predicted Count, CIS Score, and Junction status.
+- **KPI Dashboard:** Three dynamic top-level numbers for the currently selected hour: Critical Junctions (High), Active Hotspots (High/Med tiers), and the Average CIS Score of those hotspots.
 - **Charts:**
   - **24-Hour Violation Trend (Line Chart):** Shows the total predicted violations across all 24 hours of the *currently selected date*. Gives a bird's-eye view of the traffic pattern for the day.
   - **Dominant Violation Types (Bar Chart):** Shows the distribution of the most common violation types among the top-10 ranked zones for the *currently selected hour*.
