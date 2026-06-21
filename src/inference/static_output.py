@@ -611,6 +611,7 @@ def generate_static_output_with_slider(
                     "cis_score":      float(row.get("cis_score", 0)),
                     "priority_tier":  str(row.get("priority_tier", "LOW")),
                     "has_junction":   bool(row.get("has_junction", False)),
+                    "dominant_violation_type": str(row.get("dominant_violation_type", "UNKNOWN")),
                     "lat":            centroid.get("lat", 0),
                     "lon":            centroid.get("lon", 0),
                 })
@@ -629,6 +630,7 @@ def generate_static_output_with_slider(
   <title>GridLock R2 — Enforcement Priority | {target_dates[0]} | Time Slider</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{ font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; color: #2c3e50; }}
@@ -757,6 +759,41 @@ def generate_static_output_with_slider(
     </div>
   </div>
 
+  <!-- KPI Dashboard (Dynamic) -->
+  <div class="card" style="grid-column: 1 / 3;">
+    <div class="card-header">📈 Enforcement KPIs — <span id="kpi-hour-label">Hour 09:00</span></div>
+    <div class="card-body">
+      <div class="scorecard-grid">
+        <div class="score-block">
+          <div class="score-label">Predicted Violations (Hour)</div>
+          <div class="score-value" id="kpi-total">0</div>
+        </div>
+        <div class="score-block">
+          <div class="score-label">Active Hotspots (High/Med)</div>
+          <div class="score-value" id="kpi-hotspots">0</div>
+        </div>
+        <div class="score-block">
+          <div class="score-label">Avg CIS Score</div>
+          <div class="score-value" id="kpi-avg-cis">0.00</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts (Dynamic) -->
+  <div class="card">
+    <div class="card-header">📉 24-Hour Violation Trend (Day Total)</div>
+    <div class="card-body" style="height:250px">
+      <canvas id="trendChart"></canvas>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header">📊 Dominant Violation Types (Top-K Zones)</div>
+    <div class="card-body" style="height:250px">
+      <canvas id="typeChart"></canvas>
+    </div>
+  </div>
+
 </div>
 
 <footer>
@@ -851,6 +888,79 @@ function updateDisplay() {{
   document.getElementById('hour-display').textContent = hourLabel;
   document.getElementById('table-hour-label').textContent = `Hour ${{hourLabel}}`;
   document.getElementById('header-date').textContent = currentDate;
+
+  updateCharts(zones);
+}}
+
+let trendChartInstance = null;
+let typeChartInstance = null;
+
+function updateCharts(currentZones) {{
+  const allHours = ALL_DATA[currentDate] || {{}};
+  
+  // 1. Line Chart: 24-hour trend
+  const hours = Array.from({{length: 24}}, (_, i) => i);
+  const trendData = hours.map(h => {{
+    const hz = allHours[String(h)] || [];
+    return hz.reduce((sum, z) => sum + z.predicted_count, 0);
+  }});
+
+  const trendCtx = document.getElementById('trendChart').getContext('2d');
+  if (trendChartInstance) trendChartInstance.destroy();
+  trendChartInstance = new Chart(trendCtx, {{
+    type: 'line',
+    data: {{
+      labels: hours.map(h => String(h).padStart(2, '0') + ':00'),
+      datasets: [{{
+        label: 'Predicted Violations',
+        data: trendData,
+        borderColor: '#3498db',
+        backgroundColor: 'rgba(52, 152, 219, 0.2)',
+        borderWidth: 2, fill: true, tension: 0.4
+      }}]
+    }},
+    options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ display: false }} }} }}
+  }});
+
+  // 2. KPIs for the current hour
+  const totalViolations = currentZones.reduce((sum, z) => sum + z.predicted_count, 0);
+  
+  // High/Med hotspots
+  const hotspots = currentZones.filter(z => z.priority_tier === 'HIGH' || z.priority_tier === 'MEDIUM');
+  
+  const avgCis = hotspots.length > 0 
+    ? hotspots.reduce((sum, z) => sum + z.cis_score, 0) / hotspots.length 
+    : 0;
+
+  document.getElementById('kpi-total').textContent = Math.round(totalViolations).toLocaleString();
+  document.getElementById('kpi-hotspots').textContent = hotspots.length;
+  document.getElementById('kpi-avg-cis').textContent = avgCis.toFixed(2);
+  document.getElementById('kpi-hour-label').textContent = `Hour ${{String(currentHour).padStart(2, '0')}}:00`;
+
+  // 3. Bar Chart: Dominant types in Top Zones
+  const typeCounts = {{}};
+  currentZones.forEach(z => {{
+    const t = z.dominant_violation_type || 'UNKNOWN';
+    typeCounts[t] = (typeCounts[t] || 0) + 1;
+  }});
+  
+  const typeLabels = Object.keys(typeCounts).sort((a,b) => typeCounts[b] - typeCounts[a]);
+  const typeData = typeLabels.map(l => typeCounts[l]);
+
+  const typeCtx = document.getElementById('typeChart').getContext('2d');
+  if (typeChartInstance) typeChartInstance.destroy();
+  typeChartInstance = new Chart(typeCtx, {{
+    type: 'bar',
+    data: {{
+      labels: typeLabels,
+      datasets: [{{
+        label: 'Zone Count',
+        data: typeData,
+        backgroundColor: ['#e74c3c', '#e67e22', '#f1c40f', '#3498db', '#9b59b6', '#1abc9c']
+      }}]
+    }},
+    options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ display: false }} }} }}
+  }});
 }}
 
 // ── Event Listeners ──────────────────────────────────────────────────────────

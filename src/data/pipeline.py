@@ -243,6 +243,33 @@ def step8_infer(
         eval_metrics    = eval_metrics,
     )
 
+    # Generate 24-hour interactive slider map (Demo Dashboard)
+    from src.inference.static_output import generate_static_output_with_slider
+    
+    import pandas as pd
+    t_date = pd.Timestamp(target_date)
+    # Generate a week of dates starting from target_date
+    week_dates = [(t_date + pd.Timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)]
+    
+    all_dates_hours_data = {}
+    logger.info(f"Generating predictions for interactive dashboard (7 days: {week_dates[0]} to {week_dates[-1]})...")
+    
+    for d_str in week_dates:
+        all_dates_hours_data[d_str] = {}
+        for h in tqdm(range(24), desc=f"Ranking {d_str}", unit="hour", leave=False):
+            all_dates_hours_data[d_str][h] = rank_zones(ranker, target_date=d_str, target_hour=h, top_k=top_k)
+    
+    slider_html_path = project_root / "docs" / "index.html"
+    generate_static_output_with_slider(
+        all_dates_hours_data=all_dates_hours_data,
+        centroids_df=centroids_df,
+        target_dates=week_dates,
+        output_path=slider_html_path,
+        model_name=ranker["model_name"],
+        time_resolution=ranker["time_resolution"],
+        eval_metrics=eval_metrics,
+    )
+
     # Generate day schedule
     schedule_df = rank_day_schedule(ranker, target_date=target_date, top_k=5)
     csv_path = project_root / "data" / "outputs" / f"day_schedule_{target_date}.csv"
@@ -257,6 +284,7 @@ def step8_infer(
         "top_k_df":    top_k_df,
         "schedule_df": schedule_df,
         "html_path":   html_path,
+        "slider_html_path": slider_html_path,
         "csv_path":    csv_path,
     }
 
@@ -450,6 +478,8 @@ def _print_summary(state: dict[str, Any], target_date: str, target_hour: int) ->
               f"(score={row['priority_score']:.4f}, tier={row['priority_tier']})")
     if "html_path" in state:
         print(f"  Demo HTML           : {state['html_path'].name}")
+    if "slider_html_path" in state:
+        print(f"  Interactive Demo    : {state['slider_html_path'].name} (in docs/)")
     if "csv_path" in state:
         print(f"  Schedule CSV        : {state['csv_path'].name}")
     print("="*60 + "\n")

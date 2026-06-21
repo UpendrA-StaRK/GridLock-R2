@@ -273,8 +273,6 @@ GridLock_R2_Transfer/
 │   ├── eval.yaml           # CIS formula, ranker formula, NDCG relevance, split bounds
 │   └── model.yaml          # Model hyperparameters, winner checkpoint path
 ├── src/
-│   ├── dashboard/          # Streamlit interactive dashboard
-│   │   └── app.py
 │   ├── data/
 │   │   ├── validate.py     # Schema validator (8 hard checks)
 │   │   ├── load.py         # Ingest + dedup → 268K rows
@@ -330,6 +328,50 @@ Zones ranked descending by `priority_score`. Top-K output with tier labels:
 | HIGH | `priority_score ≥ 0.7 × max` |
 | MEDIUM | `priority_score ≥ 0.4 × max` |
 | LOW | `priority_score < 0.4 × max` |
+
+---
+
+## 🖥️ HTML Dashboard — Structure & Sections
+
+The dashboard is a single-page static HTML file (`docs/index.html`) divided into several key interactive sections:
+
+- **Header / Navbar:** Displays the project title, the current date being viewed, and a "DEMO — TIME SLIDER" badge.
+- **Time Slider & Date Picker:** The core interactive control. A dropdown allows switching between a generated 7-day schedule, and a range slider (0-23) allows scrubbing through the hours of the day.
+- **Interactive Map:** Powered by Leaflet.js. It renders Bengaluru map tiles and plots the top-10 enforcement zones as color-coded circle markers (Red=HIGH, Orange=MEDIUM, Green=LOW tier). Clicking a marker shows a popup with the zone's specific metrics.
+- **Model Evaluation Scorecard:** A static summary of the LightGBM model's performance metrics (MAE, RMSE, ML Lift %, NDCG@10) fetched from the pipeline evaluation logs.
+- **Zone Table:** A ranked tabular view of the top-10 enforcement zones for the selected hour. It shows Rank, Zone ID, Priority Tier, Predicted Count, and CIS Score.
+- **KPI Dashboard:** Three dynamic top-level numbers for the currently selected hour: Total Predicted Violations, Active Hotspots (High/Med tiers), and the Average CIS Score of those hotspots.
+- **Charts:**
+  - **24-Hour Violation Trend (Line Chart):** Shows the total predicted violations across all 24 hours of the *currently selected date*. Gives a bird's-eye view of the traffic pattern for the day.
+  - **Dominant Violation Types (Bar Chart):** Shows the distribution of the most common violation types among the top-10 ranked zones for the *currently selected hour*.
+
+## 💾 Dashboard Data Architecture
+
+- **Origin:** The data originates from a raw CSV of Jan-May 2024 Bengaluru Police Violations (`data/raw/`). 
+- **Processing:** The Python pipeline (`src/data/pipeline.py`) cleans the data, engineers temporal/spatial features, groups violations into geographic clusters (DBSCAN), and trains a LightGBM predictive model.
+- **Dashboard Injection:** During Step 8 (Inference), the pipeline executes predictions for a 7-day window (168 hours). It formats this output into a massive nested JSON dictionary and literally injects it into the `<script>` tag inside `docs/index.html` via Python string formatting.
+- **Data Shape Expected:** The JSON `ALL_DATA` object is structured as:
+  `{ "YYYY-MM-DD": { "0": [ {zone_data}, ... ], "1": [...], ... "23": [...] } }`
+
+## 🏃 How to Run the Dashboard
+
+Because the frontend is entirely decoupled from the backend:
+
+1. **To view the dashboard:** 
+   Simply double-click `docs/index.html` to open it in any modern web browser (Chrome/Edge/Firefox). No server is needed.
+2. **To regenerate the data (if the model changes):**
+   Activate your virtual environment and run the orchestrator script from the root directory:
+   ```bash
+   python -m src.data.pipeline --skip-training --skip-clustering --skip-features
+   ```
+   This will run inference and rewrite the `docs/index.html` file with fresh data.
+
+## 🔮 Future Improvements
+
+- **Real-time API Integration:** Instead of pre-baking JSON into the HTML file, the dashboard could fetch data from a live REST API (e.g. FastAPI) allowing for infinite historical querying and real-time streaming updates.
+- **Authentication:** Add a login layer for traffic police officers, serving specific patrol routes based on their assigned precinct.
+- **Dynamic Zones:** Implement HDBSCAN so that zone boundaries can dynamically adapt to emerging violation hotspots without requiring a full manual retrain.
+- **Live Traffic Layer:** Pull live congestion data from MapmyIndia or Google Maps APIs and overlay it on the Leaflet map to visually validate the predicted parking hotspots.
 
 ---
 

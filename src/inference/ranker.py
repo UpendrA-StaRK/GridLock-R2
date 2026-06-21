@@ -249,7 +249,16 @@ def load_ranker(
         "feature_cols":    feature_cols,
         "ckpt_dir":        ckpt_dir,
         "meta":            meta,
+        "encoders":        _load_label_encoders(project_root),
     }
+
+def _load_label_encoders(project_root: Path) -> dict:
+    import pickle
+    enc_path = project_root / "data" / "processed" / "label_encoders.pkl"
+    if enc_path.exists():
+        with open(enc_path, "rb") as f:
+            return pickle.load(f)
+    return {}
 
 
 # ── Feature column builder (single source of truth in src/data/features.py) ──
@@ -376,6 +385,7 @@ def rank_zones(
     time_resolution = ranker["time_resolution"]
     cis_df          = ranker["cis_df"]
     feature_cols    = ranker["feature_cols"]
+    encoders        = ranker.get("encoders", {})
 
     target_date = pd.Timestamp(target_date)
     hour_label  = f" hour={target_hour}" if time_resolution == "hour" else ""
@@ -409,6 +419,16 @@ def rank_zones(
             "zone_id":         zone_ids,
             "predicted_count": y_pred.astype(float).round(2),
         })
+
+        if "dominant_violation_type" in scaffold_df.columns:
+            enc_col = scaffold_df["dominant_violation_type"].values
+            if "violation_type_primary_encoded" in encoders:
+                dec_col = encoders["violation_type_primary_encoded"].inverse_transform(enc_col.astype(int))
+            else:
+                dec_col = enc_col
+            pred_df["dominant_violation_type"] = dec_col
+        else:
+            pred_df["dominant_violation_type"] = "UNKNOWN"
 
         result_df = pred_df.merge(
             cis_df[["zone_id", "cis_score", "has_junction", "priority_tier", "formula_version"]],
