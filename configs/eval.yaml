@@ -112,10 +112,10 @@ noise_zones:
 #   For now, junction presence is the best defensible proxy available.
 
 cis:
-  formula_version: "1.0"
-  formula_name: "density_x_junction_weight"
-  last_updated: "2026-06-16"
-  formula: "CIS(zone) = violation_density_norm(zone) × junction_weight(zone)"
+  formula_version: "2.0"
+  formula_name: "density_x_junction_weight_x_severity"
+  last_updated: "2026-06-22"
+  formula: "CIS(zone) = violation_density_norm(zone) × junction_weight(zone) × avg_subtype_severity(zone)"
   components:
     violation_density_norm:
       description: "zone_violation_count / max_zone_violation_count across all zones"
@@ -125,7 +125,20 @@ cis:
       description: "1.5 if any violation in zone has is_at_junction=1, else 1.0"
       values: {at_junction: 1.5, not_at_junction: 1.0}
       source_col: is_at_junction
-  output_range: "[0.0, 1.5]"
+    avg_subtype_severity:
+      description: "Mean severity of violation types in the zone"
+      values: {
+        "PARKING IN A MAIN ROAD": 3.0,
+        "DOUBLE PARKING": 2.8,
+        "PARKING NEAR ROAD CROSSING": 2.5,
+        "PARKING NEAR TRAFFIC LIGHT OR ZEBRA CROSS": 2.5,
+        "PARKING NEAR BUSTOP/SCHOOL/HOSPITAL ETC": 2.0,
+        "PARKING OPPOSITE TO ANOTHER PARKED VEHICLE": 2.0,
+        "PARKING ON FOOTPATH": 1.5,
+        "default": 1.0
+      }
+      source_col: violation_type_primary
+  output_range: "[0.0, 4.5]"
   update_policy: >
     CIS formula may be updated after any training run if a better formula
     demonstrably improves Precision@K or NDCG@10 on the test set.
@@ -133,7 +146,7 @@ cis:
 
   # Version history:
   # v1.0 (2026-06-16): violation_density_norm × junction_weight. Baseline formula.
-
+  # v2.0 (2026-06-22): Added avg_subtype_severity based on violation_type_primary.
 # ── Enforcement Priority Ranker ───────────────────────────────────
 ranker:
   formula_version: "1.0"

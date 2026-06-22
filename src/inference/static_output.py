@@ -39,21 +39,55 @@ def build_zone_centroids(
     features_with_zones_path: str | Path,
 ) -> pd.DataFrame:
     """
-    Compute the geographic centroid (mean lat/lon) of each DBSCAN zone.
+    Compute the geographic medoid (closest actual violation coordinate) of each DBSCAN zone.
+    This ensures that police are directed to real curbsides instead of mathematical centroids.
 
     Args:
         features_with_zones_path: Path to data/processed/features_with_zones.parquet
 
     Returns:
-        DataFrame with columns: zone_id, lat_centroid, lon_centroid
+        DataFrame with columns: zone_id, lat_centroid, lon_centroid, area_name
     """
-    df = pd.read_parquet(features_with_zones_path, columns=["zone_id", "latitude", "longitude"])
-    centroids = (
-        df.groupby("zone_id")
-        .agg(lat_centroid=("latitude", "mean"), lon_centroid=("longitude", "mean"))
-        .reset_index()
-    )
-    logger.info(f"Zone centroids computed: {len(centroids)} zones")
+    from sklearn.neighbors import NearestNeighbors
+    
+    df = pd.read_parquet(features_with_zones_path, columns=["zone_id", "latitude", "longitude", "police_station", "junction_name"])
+    
+    medoids = []
+    for zone_id, group in df.groupby("zone_id"):
+        center_lat = group["latitude"].mean()
+        center_lon = group["longitude"].mean()
+        
+        # Snap to nearest actual point (Geospatial Medoid)
+        coords = group[["latitude", "longitude"]].values
+        if len(coords) > 0:
+            nn = NearestNeighbors(n_neighbors=1)
+            nn.fit(coords)
+            _, idx = nn.kneighbors([[center_lat, center_lon]])
+            medoid_lat, medoid_lon = coords[idx[0][0]]
+        else:
+            medoid_lat, medoid_lon = center_lat, center_lon
+            
+        # Area name logic
+        ps_mode = group["police_station"].mode()
+        jnc_mode = group["junction_name"].mode()
+        
+        ps_str = ps_mode.iloc[0].strip() if not ps_mode.empty else "Unknown"
+        jnc_str = jnc_mode.iloc[0].strip() if not jnc_mode.empty else "No Junction"
+        
+        if jnc_str == "No Junction":
+            area_name = f"{ps_str} Area"
+        else:
+            area_name = f"{jnc_str} ({ps_str} Area)"
+            
+        medoids.append({
+            "zone_id": zone_id,
+            "lat_centroid": medoid_lat,
+            "lon_centroid": medoid_lon,
+            "area_name": area_name
+        })
+        
+    centroids = pd.DataFrame(medoids)
+    logger.info(f"Zone medoids computed: {len(centroids)} zones snapped to actual points")
     return centroids
 
 
@@ -120,17 +154,65 @@ def build_folium_map(
         colour = colour_map.get(tier, "blue")
         rank   = int(row.get("rank", 0))
 
+        area_name_safe = row.get("area_name", f"Zone {int(row['zone_id'])}")
+        lat_c = row.get("lat_centroid", 0.0)
+        lon_c = row.get("lon_centroid", 0.0)
+
         popup_html = f"""
-        <div style='font-family:Arial; font-size:13px; min-width:180px'>
-          <b>Rank #{rank} — Zone {int(row['zone_id'])}</b><br>
-          <hr style='margin:4px 0'>
-          Priority Score : <b>{row['priority_score']:.4f}</b><br>
-          Tier           : <b style='color:{colour}'>{tier}</b><br>
-          Predicted Count: {row['predicted_count']:.1f}<br>
-          CIS Score      : {row['cis_score']:.4f}<br>
-          Junction       : {'Yes' if row.get('has_junction') else 'No'}
-        </div>
+        <div style="font-family:'Segoe UI',Arial,sans-serif; font-size:13px; color:#2c3e50; min-width:240px; margin:-14px -20px;">
+          <div style="background:#f8f9fa; border-bottom:1px solid #e8ecef; padding:10px 12px; border-radius:12px 12px 0 0;">
+            <div style="font-weight:700; font-size:14px; margin-bottom:4px; display:flex; align-items:center; gap:6px;">
+              <span style="background:{colour}; color:white; padding:2px 6px; border-radius:4px; font-size:10px; text-transform:uppercase;">{tier}</span>
+              #{rank} {area_name_safe}
+            </div>
+            <div style="font-size:11px; color:#7f8c8d;">
+              📍 Zone {int(row['zone_id'])} &bull; {lat_c:.5f}, {lon_c:.5f}
+            </div>
+          </div>
+          <div style="padding:12px;">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
+              <div style="background:#f4f6f8; padding:6px 8px; border-radius:6px; border:1px solid #eef0f2;">
+                <div style="font-size:10px; color:#7f8c8d; text-transform:uppercase;">Pred. Risk Score</div>
+                <div style="font-size:13px; font-weight:bold;">{row['priority_score']:.4f}</div>
+              </div>
+              <div style="background:#f4f6f8; padding:6px 8px; border-radius:6px; border:1px solid #eef0f2;">
+                <div style="font-size:10px; color:#7f8c8d; text-transform:uppercase;">Pred. Violations</div>
+                <div style="font-size:13px; font-weight:bold;">{row['predicted_count']:.1f}</div>
+              </div>
+              <div style="background:#f4f6f8; padding:6px 8px; border-radius:6px; border:1px solid #eef0f2;">
+                <div style="font-size:10px; color:#7f8c8d; text-transform:uppercase;">CIS Score</div>
+                <div style="font-size:13px; font-weight:bold;">{row['cis_score']:.4f}</div>
+              </div>
+              <div style="background:#f4f6f8; padding:6px 8px; border-radius:6px; border:1px solid #eef0f2;">
+                <div style="font-size:10px; color:#7f8c8d; text-transform:uppercase;">Primary Issue</div>
+                <div style="font-size:11px; font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{row.get('dominant_violation_type', 'Unknown')}">{row.get('dominant_violation_type', 'Unknown')}</div>
+              </div>
+            </div>
         """
+        
+        eco_loss = row.get("economic_loss_inr", 0)
+        if eco_loss > 0:
+            popup_html += f"""
+            <div style="margin-bottom:10px; font-size:12px;">
+              <span style="color:#7f8c8d">Est. Economic Loss:</span> <b>₹{eco_loss:,.0f}</b>
+            </div>
+            """
+            
+        nlp_exp = row.get("nlp_explanation", "")
+        disp_strat = row.get("dispatch_strategy", "")
+        if nlp_exp and disp_strat:
+            popup_html += f"""
+            <details style="background:#fff8e1; border:1px solid #ffe082; border-radius:6px; outline:none;">
+              <summary style="padding:8px; font-size:12px; font-weight:600; color:#b7950b; cursor:pointer; user-select:none; outline:none;">
+                🚔 {disp_strat}
+              </summary>
+              <div style="padding:0 8px 8px 8px; font-size:11px; color:#7d6608;">
+                {nlp_exp}
+              </div>
+            </details>
+            """
+            
+        popup_html += "</div></div>"
 
         folium.CircleMarker(
             location=[row["lat_centroid"], row["lon_centroid"]],
@@ -139,8 +221,8 @@ def build_folium_map(
             fill=True,
             fill_color=colour,
             fill_opacity=0.7,
-            popup=folium.Popup(popup_html, max_width=220),
-            tooltip=f"#{rank} Zone {int(row['zone_id'])} ({tier})",
+            popup=folium.Popup(popup_html, max_width=280),
+            tooltip=f"#{rank} {area_name_safe} ({tier})",
         ).add_to(m)
 
         # Add rank number label
@@ -148,7 +230,7 @@ def build_folium_map(
             location=[row["lat_centroid"], row["lon_centroid"]],
             icon=folium.DivIcon(
                 html=f'<div style="font-size:10px;font-weight:bold;color:white;'
-                     f'text-align:center;line-height:20px">#{rank}</div>',
+                     f'text-align:center;line-height:20px;pointer-events:none;">#{rank}</div>',
                 icon_size=(20, 20),
                 icon_anchor=(10, 10),
             ),
@@ -171,14 +253,27 @@ def _build_table_html(top_k_df: pd.DataFrame) -> str:
     for rank, row in top_k_df.reset_index().iterrows():
         tier   = str(row.get("priority_tier", "LOW"))
         colour = tier_colours.get(tier, "#555")
+        area_name_safe = row.get("area_name", "Unknown Area")
+        lat_c = row.get("lat_centroid", 0.0)
+        lon_c = row.get("lon_centroid", 0.0)
+
         rows_html += f"""
         <tr>
           <td style='text-align:center;font-weight:bold'>{int(row.get('rank', rank+1))}</td>
           <td style='text-align:center'>{int(row['zone_id'])}</td>
+          <td style='text-align:left'>
+            <b>{area_name_safe}</b><br>
+            <span style='font-size:11px;color:#7f8c8d'>({lat_c:.5f}, {lon_c:.5f})</span>
+          </td>
           <td style='text-align:center;font-weight:bold;color:{colour}'>{tier}</td>
           <td style='text-align:right'>{row['predicted_count']:.1f}</td>
+          <td style='text-align:right'>₹{row.get('economic_loss_inr', 0):,.0f}</td>
           <td style='text-align:right'>{row['cis_score']:.4f}</td>
           <td style='text-align:center'>{'✓' if row.get('has_junction') else '—'}</td>
+          <td style='text-align:left;font-size:12px;'>
+            <b>{row.get('dispatch_strategy', '')}</b><br>
+            <span style='color:#7f8c8d'>{row.get('nlp_explanation', '')}</span>
+          </td>
         </tr>"""
 
     table_html = f"""
@@ -188,10 +283,13 @@ def _build_table_html(top_k_df: pd.DataFrame) -> str:
           <tr style='background:#2c3e50; color:white'>
             <th style='padding:8px'>Rank</th>
             <th style='padding:8px'>Zone ID</th>
+            <th style='padding:8px'>Location</th>
             <th style='padding:8px'>Priority</th>
             <th style='padding:8px'>Predicted Count</th>
+            <th style='padding:8px'>Economic Loss</th>
             <th style='padding:8px'>CIS Score</th>
             <th style='padding:8px'>Junction</th>
+            <th style='padding:8px'>Copilot & Dispatch Strategy</th>
           </tr>
         </thead>
         <tbody>
@@ -573,6 +671,7 @@ def generate_static_output_with_slider(
         centroid_lookup[int(row["zone_id"])] = {
             "lat": float(row["lat_centroid"]),
             "lon": float(row["lon_centroid"]),
+            "area_name": str(row.get("area_name", "Unknown Area")),
         }
 
     # Build JS-embeddable data structure: date -> hour -> list of zone records
@@ -597,6 +696,10 @@ def generate_static_output_with_slider(
                     "priority_tier":  str(row.get("priority_tier", "LOW")),
                     "has_junction":   bool(row.get("has_junction", False)),
                     "dominant_violation_type": str(row.get("dominant_violation_type", "UNKNOWN")),
+                    "economic_loss_inr": float(row.get("economic_loss_inr", 0)),
+                    "nlp_explanation": str(row.get("nlp_explanation", "")),
+                    "dispatch_strategy": str(row.get("dispatch_strategy", "")),
+                    "area_name":      str(centroid.get("area_name", "Unknown Area")),
                     "lat":            centroid.get("lat", 0),
                     "lon":            centroid.get("lon", 0),
                 })
@@ -651,7 +754,9 @@ def generate_static_output_with_slider(
 
     .container {{ padding: 20px 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }}
     #map-container {{ background: white; padding: 12px; grid-column: 1 / 3; height: 500px; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); }}
-    #leaflet-map {{ width: 100%; height: 100%; }}
+    #leaflet-map {{ width: 100%; height: 100%; outline: none; }}
+    path.leaflet-interactive:focus {{ outline: none; }}
+    .leaflet-container:focus {{ outline: none; }}
     .card {{
       background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
       overflow: hidden;
@@ -735,8 +840,12 @@ def generate_static_output_with_slider(
       <table>
         <thead>
           <tr>
-            <th>Rank</th><th>Zone ID</th><th>Priority</th>
-            <th>Predicted Count</th><th>CIS</th><th>Junction</th>
+            <th>Rank</th><th>Zone ID</th><th>Location</th><th>Priority</th>
+            <th>Predicted<br>Count</th>
+            <th>Economic<br>Loss</th>
+            <th>CIS Score</th>
+            <th>Junction</th>
+            <th>Copilot & Dispatch Strategy</th>
           </tr>
         </thead>
         <tbody id="zone-tbody"></tbody>
@@ -831,21 +940,66 @@ function updateDisplay() {{
       weight: 2, opacity: 1, fillOpacity: 0.82
     }});
 
-    circle.bindPopup(`
-      <div style="font-family:Arial;font-size:13px;min-width:160px">
-        <b>Rank #${{z.rank}} — Zone ${{z.zone_id}}</b><hr style="margin:4px 0">
-        Priority Score: <b>${{z.priority_score.toFixed(4)}}</b><br>
-        Tier: <b style="color:${{color}}">${{z.priority_tier}}</b><br>
-        Predicted Count: ${{z.predicted_count.toFixed(1)}}<br>
-        CIS Score: ${{z.cis_score.toFixed(4)}}<br>
-        Junction: ${{z.has_junction ? '✓ Yes' : '—'}}
+    let popupHtml = `<div style="font-family:'Segoe UI',Arial,sans-serif; font-size:13px; color:#2c3e50; min-width:240px; margin:-14px -20px;">
+      <div style="background:#f8f9fa; border-bottom:1px solid #e8ecef; padding:10px 12px; border-radius:12px 12px 0 0;">
+        <div style="font-weight:700; font-size:14px; margin-bottom:4px; display:flex; align-items:center; gap:6px;">
+          <span style="background:${{color}}; color:white; padding:2px 6px; border-radius:4px; font-size:10px; text-transform:uppercase;">${{z.priority_tier}}</span>
+          #${{z.rank}} ${{z.area_name}}
+        </div>
+        <div style="font-size:11px; color:#7f8c8d;">
+          📍 Zone ${{z.zone_id}} &bull; ${{z.lat.toFixed(5)}}, ${{z.lon.toFixed(5)}}
+        </div>
       </div>
-    `);
+      <div style="padding:12px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
+          <div style="background:#f4f6f8; padding:6px 8px; border-radius:6px; border:1px solid #eef0f2;">
+            <div style="font-size:10px; color:#7f8c8d; text-transform:uppercase;">Pred. Risk Score</div>
+            <div style="font-size:13px; font-weight:bold;">${{z.priority_score.toFixed(4)}}</div>
+          </div>
+          <div style="background:#f4f6f8; padding:6px 8px; border-radius:6px; border:1px solid #eef0f2;">
+            <div style="font-size:10px; color:#7f8c8d; text-transform:uppercase;">Pred. Violations</div>
+            <div style="font-size:13px; font-weight:bold;">${{z.predicted_count.toFixed(1)}}</div>
+          </div>
+          <div style="background:#f4f6f8; padding:6px 8px; border-radius:6px; border:1px solid #eef0f2;">
+            <div style="font-size:10px; color:#7f8c8d; text-transform:uppercase;">CIS Score</div>
+            <div style="font-size:13px; font-weight:bold;">${{z.cis_score.toFixed(4)}}</div>
+          </div>
+          <div style="background:#f4f6f8; padding:6px 8px; border-radius:6px; border:1px solid #eef0f2;">
+            <div style="font-size:10px; color:#7f8c8d; text-transform:uppercase;">Primary Issue</div>
+            <div style="font-size:11px; font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${{z.dominant_violation_type}}">${{z.dominant_violation_type}}</div>
+          </div>
+        </div>`;
+
+    if (z.economic_loss_inr > 0) {{
+        popupHtml += `<div style="margin-bottom:10px; font-size:12px;">
+          <span style="color:#7f8c8d">Est. Economic Loss:</span> <b>₹${{z.economic_loss_inr.toLocaleString(undefined, {{maximumFractionDigits: 0}})}}</b>
+        </div>`;
+    }}
+
+    if (z.nlp_explanation && z.dispatch_strategy) {{
+        popupHtml += `<details style="background:#fff8e1; border:1px solid #ffe082; border-radius:6px; outline:none;">
+          <summary style="padding:8px; font-size:12px; font-weight:600; color:#b7950b; cursor:pointer; user-select:none; outline:none;">
+            🚔 ${{z.dispatch_strategy}}
+          </summary>
+          <div style="padding:0 8px 8px 8px; font-size:11px; color:#7d6608;">
+            ${{z.nlp_explanation}}
+          </div>
+        </details>`;
+    }}
+    
+    popupHtml += `</div></div>`;
+    circle.bindPopup(popupHtml, {{maxWidth: 280}});
+
+    circle.bindTooltip(`<b>#${{z.rank}} ${{z.area_name}}</b>`, {{
+      direction: 'top',
+      opacity: 0.9
+    }});
 
     // Rank number label
     const label = L.marker([z.lat, z.lon], {{
+      interactive: false,
       icon: L.divIcon({{
-        html: `<div style="color:white;font-size:11px;font-weight:bold;text-align:center;line-height:22px">#${{z.rank}}</div>`,
+        html: `<div style="color:white;font-size:11px;font-weight:bold;text-align:center;line-height:22px;pointer-events:none;">#${{z.rank}}</div>`,
         iconSize: [22, 22], iconAnchor: [11, 11], className: ''
       }})
     }});
@@ -859,10 +1013,19 @@ function updateDisplay() {{
     tr.innerHTML = `
       <td>${{z.rank}}</td>
       <td>${{z.zone_id}}</td>
+      <td style="text-align:left">
+        <b>${{z.area_name}}</b><br>
+        <span style="font-size:11px;color:#7f8c8d">(${{z.lat.toFixed(5)}}, ${{z.lon.toFixed(5)}})</span>
+      </td>
       <td class="tier-${{z.priority_tier}}">${{z.priority_tier}}</td>
       <td>${{z.predicted_count.toFixed(1)}}</td>
+      <td>₹${{z.economic_loss_inr.toLocaleString(undefined, {{maximumFractionDigits: 0}})}}</td>
       <td>${{z.cis_score.toFixed(4)}}</td>
       <td>${{z.has_junction ? '✓' : '—'}}</td>
+      <td style="text-align:left;font-size:12px;line-height:1.2;">
+        <b>${{z.dispatch_strategy}}</b><br>
+        <span style="color:#7f8c8d">${{z.nlp_explanation}}</span>
+      </td>
     `;
     tbody.appendChild(tr);
   }});

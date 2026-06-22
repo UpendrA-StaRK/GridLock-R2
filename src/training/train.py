@@ -166,13 +166,22 @@ def _add_zone_aggregate_features(
     zone_stats = (
         train_df.groupby("zone_id", observed=True)
         .agg(
-            zone_mean_count   =(target_col, "mean"),
             zone_median_count =(target_col, "median"),
             zone_total_count  =(target_col, "sum"),
+            zone_row_count    =(target_col, "size"),
             zone_junction_frac=("fraction_at_junction", "mean"),
         )
         .reset_index()
     )
+
+    # Mathematical Regularization (Empirical-Bayes Shrinkage)
+    global_mean = train_df[target_col].mean()
+    m = zone_stats["zone_row_count"].mean() # Prior weight
+    
+    zone_stats["zone_eb_shrunk_mean_count"] = (
+        (zone_stats["zone_total_count"] + m * global_mean) / 
+        (zone_stats["zone_row_count"] + m)
+    ).astype("float32")
 
     # Add CIS score from cis_df
     if "zone_id" in cis_df.columns and "cis_score" in cis_df.columns:
@@ -185,9 +194,21 @@ def _add_zone_aggregate_features(
         zone_stats["zone_cis_score"] = 0.0
         logger.warning("cis_df missing 'cis_score' column — zone_cis_score set to 0.0")
 
+    # Add peak hour ratio
+    if "hour_of_day" in train_df.columns:
+        is_peak = train_df["hour_of_day"].isin([8, 9, 10, 17, 18, 19])
+        peak_counts = train_df[is_peak].groupby("zone_id", observed=True)[target_col].sum()
+        total_counts = train_df.groupby("zone_id", observed=True)[target_col].sum()
+        peak_ratio = (peak_counts / total_counts).fillna(0.0).rename("zone_peak_hour_ratio")
+        zone_stats = zone_stats.merge(peak_ratio, on="zone_id", how="left")
+        zone_stats["zone_peak_hour_ratio"] = zone_stats["zone_peak_hour_ratio"].fillna(0.0)
+    else:
+        zone_stats["zone_peak_hour_ratio"] = 0.0
+
     agg_cols = [
-        "zone_id", "zone_mean_count", "zone_median_count",
+        "zone_id", "zone_eb_shrunk_mean_count", "zone_median_count",
         "zone_total_count", "zone_junction_frac", "zone_cis_score",
+        "zone_peak_hour_ratio",
     ]
     zone_stats = zone_stats[agg_cols]
 
@@ -196,8 +217,8 @@ def _add_zone_aggregate_features(
     test_df  = test_df.merge(zone_stats, on="zone_id", how="left")
 
     # Fill NaN for test zones not seen in training (cold-start fallback)
-    for col in ["zone_mean_count", "zone_median_count", "zone_cis_score",
-                "zone_junction_frac", "zone_total_count"]:
+    for col in ["zone_eb_shrunk_mean_count", "zone_median_count", "zone_cis_score",
+                "zone_junction_frac", "zone_total_count", "zone_peak_hour_ratio"]:
         train_df[col] = train_df[col].fillna(0.0).astype("float32")
         test_df[col]  = test_df[col].fillna(0.0).astype("float32")
 
@@ -222,8 +243,8 @@ def _add_zone_aggregate_features(
     n_zones_stats = len(zone_stats)
     logger.info(
         f"Zone aggregates computed for {n_zones_stats} training zones | "
-        f"zone_mean_count range: [{zone_stats['zone_mean_count'].min():.2f}, "
-        f"{zone_stats['zone_mean_count'].max():.2f}]"
+        f"zone_eb_shrunk_mean_count range: [{zone_stats['zone_eb_shrunk_mean_count'].min():.2f}, "
+        f"{zone_stats['zone_eb_shrunk_mean_count'].max():.2f}]"
     )
     return train_df, test_df
 
@@ -642,20 +663,28 @@ def run_training(
         eval_result["time_resolution"] = time_resolution
 
         # Compute zone_stats to save with checkpoint (needed by ranker at inference time)
-        _zone_stats = (
+        _zone_stats_base = (
             train_df.groupby("zone_id", observed=True)
             .agg(
-                zone_mean_count   =(target_col, "mean"),
                 zone_median_count =(target_col, "median"),
                 zone_total_count  =(target_col, "sum"),
+                zone_row_count    =(target_col, "size"),
                 zone_junction_frac=("fraction_at_junction", "mean"),
             )
             .reset_index()
-            .merge(
-                cis_df[["zone_id", "cis_score"]].rename(columns={"cis_score": "zone_cis_score"}),
-                on="zone_id",
-                how="left",
-            )
+        )
+        
+        global_mean = train_df[target_col].mean()
+        m = _zone_stats_base["zone_row_count"].mean()
+        _zone_stats_base["zone_eb_shrunk_mean_count"] = (
+            (_zone_stats_base["zone_total_count"] + m * global_mean) / 
+            (_zone_stats_base["zone_row_count"] + m)
+        ).astype("float32")
+        
+        _zone_stats = _zone_stats_base.merge(
+            cis_df[["zone_id", "cis_score"]].rename(columns={"cis_score": "zone_cis_score"}),
+            on="zone_id",
+            how="left",
         )
         _zone_stats["zone_cis_score"] = _zone_stats["zone_cis_score"].fillna(0.0)
 

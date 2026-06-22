@@ -135,6 +135,7 @@ def extract_row_features(
     steps = [
         "Parse violation_type",
         "Derive is_at_junction",
+        "Derive vehicle classes",
         "Temporal features",
         "Impute center_code",
         "Label encode",
@@ -165,6 +166,18 @@ def extract_row_features(
             f"✓ is_at_junction derived: {n_junction:,} junction rows "
             f"({metadata['is_at_junction_pct']:.1f}%)"
         )
+        pbar.update(1)
+
+        # ── Step 2b: Derive vehicle classes ───────────────────────────────
+        pbar.set_description("Derive vehicle classes")
+        two_wheelers = ["SCOOTER", "MOTOR CYCLE", "MOPED"]
+        heavy_vehicles = ["PRIVATE BUS", "BUS (BMTC/KSRTC)", "HGV", "LORRY/GOODS VEHICLE", "TANKER", "FACTORY BUS", "TOURIST BUS"]
+        
+        df["is_two_wheeler"] = df["vehicle_type"].str.strip().str.upper().isin(two_wheelers).astype("int8")
+        df["is_heavy_vehicle"] = df["vehicle_type"].str.strip().str.upper().isin(heavy_vehicles).astype("int8")
+        
+        metadata["two_wheeler_pct"] = round(df["is_two_wheeler"].mean() * 100, 2)
+        metadata["heavy_vehicle_pct"] = round(df["is_heavy_vehicle"].mean() * 100, 2)
         pbar.update(1)
 
         # ── Step 3: Temporal features ─────────────────────────────────────
@@ -206,6 +219,8 @@ def extract_row_features(
         "violation_type_primary",
         "violation_type_primary_encoded",
         "is_at_junction",
+        "is_two_wheeler",
+        "is_heavy_vehicle",
         "hour_of_day",
         "day_of_week",
         "is_weekend",
@@ -308,6 +323,8 @@ def aggregate_to_zone_grid(
         # Zone-level feature summary aggregated per time block
         agg_ops: dict = {
             "fraction_at_junction":           ("is_at_junction", "mean"),
+            "fraction_two_wheeler":           ("is_two_wheeler", "mean"),
+            "fraction_heavy_vehicle":         ("is_heavy_vehicle", "mean"),
             "dominant_violation_type":        ("violation_type_primary_encoded", _mode),
             "dominant_vehicle_type":          ("vehicle_type_encoded", _mode),
             # Add mode-encoded categoricals directly
@@ -402,6 +419,45 @@ def aggregate_to_zone_grid(
             # Not applicable for day resolution, but fill with 0
             agg_df["violation_count_lag_1h"] = 0.0
 
+        # spatial_lag_1h_count (requires coordinates and haversine matrix)
+        if time_resolution == "hour" and "latitude" in df.columns and "longitude" in df.columns:
+            pbar.set_description("Computing Spatial Lag")
+            zone_centroids = df.groupby("zone_id", observed=True)[["latitude", "longitude"]].median()
+            
+            from sklearn.metrics import DistanceMetric
+            dist = DistanceMetric.get_metric('haversine')
+            coords = np.radians(zone_centroids[["latitude", "longitude"]])
+            dist_matrix = dist.pairwise(coords) * 6371.0  # Earth radius in km
+            
+            # Find neighbors within 2.0 km (excluding self)
+            neighbors_dict = {}
+            for i, zone_i in enumerate(zone_centroids.index):
+                is_neighbor = (dist_matrix[i] < 2.0) & (dist_matrix[i] > 0.0)
+                neighbors_dict[zone_i] = zone_centroids.index[is_neighbor].tolist()
+                
+            # Pivot the 1h lag to allow fast neighbor lookup
+            # Since agg_df is sorted chronologically, we can just pivot it
+            lag_pivot = agg_df.pivot(index=["date", "hour_of_day"], columns="zone_id", values="violation_count_lag_1h").fillna(0.0)
+            
+            spatial_lag_df = pd.DataFrame(index=lag_pivot.index, columns=lag_pivot.columns)
+            for z in lag_pivot.columns:
+                nbrs = neighbors_dict.get(z, [])
+                valid_nbrs = [n for n in nbrs if n in lag_pivot.columns]
+                if valid_nbrs:
+                    spatial_lag_df[z] = lag_pivot[valid_nbrs].mean(axis=1)
+                else:
+                    spatial_lag_df[z] = 0.0
+                    
+            spatial_lag_melted = spatial_lag_df.reset_index().melt(
+                id_vars=["date", "hour_of_day"], 
+                var_name="zone_id", 
+                value_name="spatial_lag_1h_count"
+            )
+            agg_df = agg_df.merge(spatial_lag_melted, on=["zone_id", "date", "hour_of_day"], how="left")
+            agg_df["spatial_lag_1h_count"] = agg_df["spatial_lag_1h_count"].fillna(0.0).astype("float32")
+        else:
+            agg_df["spatial_lag_1h_count"] = 0.0
+            
         pbar.update(1)
 
     n_zones = agg_df["zone_id"].nunique()
@@ -454,18 +510,19 @@ def get_feature_cols(
 
     # Zone aggregate features
     cols += [
-        "zone_mean_count", "zone_median_count", "zone_cis_score",
+        "zone_eb_shrunk_mean_count", "zone_median_count", "zone_cis_score",
         "zone_junction_frac", "zone_total_count", "peak_hour_flag",
+        "zone_peak_hour_ratio"
     ]
 
-    # Spatial
-    cols.append("fraction_at_junction")
+    # Spatial & Composition
+    cols.extend(["fraction_at_junction", "fraction_two_wheeler", "fraction_heavy_vehicle"])
 
-    # Historical — leakage-free rolling/lag
-    cols.extend([
-        "rolling_7d_count", "rolling_std_7d",
-        "violation_count_lag_1h", "lag_24h", "lag_7d",
-    ])
+    # Historical
+    cols += [
+        "rolling_7d_count", "rolling_std_7d", "violation_count_lag_1h", "spatial_lag_1h_count",
+        "lag_24h", "lag_7d"
+    ]
 
     # Categorical
     cols += [

@@ -207,6 +207,46 @@ def precision_at_k(
     return round(prec, 6)
 
 
+# ── Capture@K (Business Metric) ──────────────────────────────────────────────
+
+def capture_at_k(
+    zone_scores: pd.Series,
+    zone_true_counts: pd.Series,
+    k: int = 10,
+) -> float:
+    """
+    Compute Capture@K — the percentage of total actual test-set violations
+    that occurred in the model's top-K recommended zones.
+    
+    This is a pure business metric representing operational success given a 
+    fixed patrol budget of K zones.
+    
+    Args:
+        zone_scores:      Series indexed by zone_id with predicted priority scores.
+        zone_true_counts: Series indexed by zone_id with actual violation counts.
+        k:                Number of patrol zones budget.
+        
+    Returns:
+        Capture percentage in [0.0, 1.0].
+    """
+    common_idx = zone_scores.index.intersection(zone_true_counts.index)
+    if len(common_idx) == 0 or zone_true_counts.sum() == 0:
+        return 0.0
+        
+    scores = zone_scores.loc[common_idx]
+    trues  = zone_true_counts.loc[common_idx]
+    
+    # Sort zones by predicted priority descending
+    top_k_idx = scores.sort_values(ascending=False).index[:k]
+    
+    # Sum actual violations in those top K zones
+    captured_violations = trues.loc[top_k_idx].sum()
+    total_violations = trues.sum()
+    
+    capture_rate = captured_violations / total_violations
+    return round(float(capture_rate), 6)
+
+
 # ── Naive mean-per-zone baseline (regression benchmark) ───────────────────────
 
 def naive_mean_baseline(
@@ -393,10 +433,12 @@ def full_eval(
         ranking_results[f"k{k}"] = {
             "ndcg_at_k":    ndcg_at_k(model_priority, relevance, k=k),
             "precision_at_k": precision_at_k(model_priority, relevance, k=k),
+            "capture_at_k": capture_at_k(model_priority, zone_true_counts, k=k),
         }
         logger.info(
             f"  [{model_name}] NDCG@{k}={ranking_results[f'k{k}']['ndcg_at_k']:.4f}  "
-            f"Precision@{k}={ranking_results[f'k{k}']['precision_at_k']:.4f}"
+            f"Precision@{k}={ranking_results[f'k{k}']['precision_at_k']:.4f}  "
+            f"Capture@{k}={ranking_results[f'k{k}']['capture_at_k']*100:.1f}%"
         )
 
     # 7. Frequency baseline
@@ -408,10 +450,12 @@ def full_eval(
         baseline_results[f"k{k}"] = {
             "ndcg_at_k":      ndcg_at_k(baseline_priority, relevance, k=k),
             "precision_at_k": precision_at_k(baseline_priority, relevance, k=k),
+            "capture_at_k":   capture_at_k(baseline_priority, zone_true_counts, k=k),
         }
         logger.info(
             f"  [freq-baseline] NDCG@{k}={baseline_results[f'k{k}']['ndcg_at_k']:.4f}  "
-            f"Precision@{k}={baseline_results[f'k{k}']['precision_at_k']:.4f}"
+            f"Precision@{k}={baseline_results[f'k{k}']['precision_at_k']:.4f}  "
+            f"Capture@{k}={baseline_results[f'k{k}']['capture_at_k']*100:.1f}%"
         )
 
     # 9. Beat-baseline flags
@@ -457,8 +501,10 @@ def full_eval(
     rounds_trained = len(next(iter((eval_history or {}).values()), []))
     ndcg10 = ranking_results.get("k10", {}).get("ndcg_at_k", 0.0)
     prec10 = ranking_results.get("k10", {}).get("precision_at_k", 0.0)
+    capt10 = ranking_results.get("k10", {}).get("capture_at_k", 0.0)
     b_ndcg = baseline_results.get("k10", {}).get("ndcg_at_k", 0.0)
     b_prec = baseline_results.get("k10", {}).get("precision_at_k", 0.0)
+    b_capt = baseline_results.get("k10", {}).get("capture_at_k", 0.0)
     logger.info(
         f"\n{'─'*58}\n"
         f"  SCORECARD -- {model_name.upper()} / {time_resolution}\n"
@@ -472,6 +518,7 @@ def full_eval(
         f"  Ranking — Aggregate (test set):\n"
         f"    NDCG@10     : {ndcg10:.4f}  (freq-baseline: {b_ndcg:.4f})\n"
         f"    Prec@10     : {prec10:.4f}  (freq-baseline: {b_prec:.4f})\n"
+        f"    Capture@10  : {capt10*100:.1f}% (freq-baseline: {b_capt*100:.1f}%)\n"
         f"  Ranking — Per-hour [PRIMARY METRIC]:\n"
         f"    NDCG@10 mean: {per_hour_ndcg['mean_ndcg']:.4f}  "
         f"(baseline: {baseline_per_hour_ndcg['mean_ndcg']:.4f})  "

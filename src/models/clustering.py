@@ -337,7 +337,10 @@ def compute_cis(
         f"Computing CIS v{formula_version} for {df['zone_id'].nunique()} zones ..."
     )
 
-    with tqdm(total=4, desc="Computing CIS", unit="step", leave=True) as pbar:
+    subtype_weights = cis_cfg.get("components", {}).get("avg_subtype_severity", {}).get("values", {"default": 1.0})
+    default_severity = subtype_weights.get("default", 1.0)
+
+    with tqdm(total=5, desc="Computing CIS", unit="step", leave=True) as pbar:
 
         # Step 1: Violation count per zone
         pbar.set_description("Counting violations per zone")
@@ -369,19 +372,35 @@ def compute_cis(
         )
         pbar.update(1)
 
-        # Step 4: CIS = density_norm × junction_weight
-        # Noise zone override: multiply by noise_cis_weight instead
+        # Step 4: subtype_severity per zone
+        pbar.set_description("Computing subtype severities")
+        if "violation_type_primary" in df.columns:
+            df["subtype_severity"] = df["violation_type_primary"].map(subtype_weights).fillna(default_severity)
+        else:
+            df["subtype_severity"] = default_severity
+            
+        zone_severity = (
+            df.groupby("zone_id", observed=True)["subtype_severity"]
+            .mean()
+            .reset_index(name="avg_subtype_severity")
+        )
+        zone_counts = zone_counts.merge(zone_severity, on="zone_id", how="left")
+        zone_counts["avg_subtype_severity"] = zone_counts["avg_subtype_severity"].fillna(default_severity)
+        pbar.update(1)
+
+        # Step 5: CIS = density_norm × junction_weight × avg_subtype_severity
+        # Noise zone override: multiply by noise_cis_weight instead of junction_weight
         pbar.set_description("Computing CIS scores")
         zone_counts["cis_score"] = (
-            zone_counts["violation_density_norm"] * zone_counts["junction_weight"]
+            zone_counts["violation_density_norm"] * zone_counts["junction_weight"] * zone_counts["avg_subtype_severity"]
         )
         # Apply noise zone CIS override
         noise_mask = zone_counts["zone_id"] == -1
         if noise_mask.any():
-            # CIS for noise zone = density_norm * noise_cis_weight (not junction_weight)
+            # CIS for noise zone = density_norm * noise_cis_weight * avg_subtype_severity
             zone_counts.loc[noise_mask, "junction_weight"] = noise_cis_weight
             zone_counts.loc[noise_mask, "cis_score"] = (
-                zone_counts.loc[noise_mask, "violation_density_norm"] * noise_cis_weight
+                zone_counts.loc[noise_mask, "violation_density_norm"] * noise_cis_weight * zone_counts.loc[noise_mask, "avg_subtype_severity"]
             )
             logger.info(
                 f"  Noise zone (zone_id=-1): cis_weight_override={noise_cis_weight} applied"

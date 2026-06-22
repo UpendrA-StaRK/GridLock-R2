@@ -1,6 +1,6 @@
 # GridLock R2 — PS1: Parking-Induced Congestion
 
-> **Problem Statement 1 — Gridlock 2.0 Hackathon | Flipkart HQ, Bengaluru**
+> **Problem Statement 1 — Gridlock 2.0 Hackathon**
 >
 > Bengaluru generates tens of thousands of illegal parking violations per day, but enforcement is reactive and patrol-memory-based. **GridLock R2** ingests 150 days of real police violation records, identifies the city's true congestion-driving parking clusters, and produces a ranked enforcement schedule — telling officers *exactly which 10 zones to prioritise at which hour* — so that every patrol car maximises congestion reduction per kilometre driven.
 
@@ -21,17 +21,17 @@ Raw CSV (298K rows)
 [Step 3] Row-level Features         features.py        temporal + spatial + categorical
     │
     ▼
-[Step 4] Geospatial Clustering      clustering.py      DBSCAN → 139 enforcement zones + CIS
+[Step 4] Geospatial Clustering      clustering.py      DBSCAN + Geospatial Medoids → 139 zones + CIS
     │
     ▼
 [Step 5] Zone × Time Grid           features.py        aggregate to zone×hour / zone×day
-    │                                                  zone aggregate features computed here
+    │                                                  zone aggregate features & spatial lag computed here
     ▼
 [Stage 1] ML Hotspot Predictor      train.py           LightGBM (Winner of 3-algorithm eval)
     │                                                  no zone_id leakage
     ▼
 [Stage 2] Ranker + Demo Output      ranker.py          priority_score = predicted_count × CIS
-                                    static_output.py   HTML map + 24h time-slider
+                                    static_output.py   HTML map + 24h time-slider + Copilot & Economic Loss
 ```
 
 ---
@@ -63,10 +63,14 @@ To install dependencies, set up the environment, and run the entire pipeline fro
 
 > **Note for Judges (PPT Reproducibility Slide):** 
 > To reproduce the results without training from scratch, you can download our pre-trained checkpoint:
-> **[Link to Google Drive / HuggingFace Checkpoint Placeholder]**
+> **https://drive.google.com/drive/folders/1BxkmBGP63wseFhdtQjGgW-69lYrgWgjt?usp=sharing**
 
-If you have downloaded our pre-trained checkpoint and want to generate the dashboard without re-running the training phase (which now takes just ~1.5 minutes):
-1. Create a folder named `submission_checkpoint` in the root of the project.
+If you have downloaded our pre-trained checkpoint folder, follow these steps to generate the dashboard in ~1.5 minutes:
+
+1. **Place the checkpoint in your project root:**
+   - Download `submission_checkpoint/` folder from Google Drive
+   - Place it in the root of your project (same level as `notebooks/`, `src/`, `scripts/`)
+   - The folder contains: `model.lgb`, `features.yaml`, `model.yaml`, `eval.yaml`, and `training_meta.json`
 2. Place the downloaded checkpoint files directly inside `submission_checkpoint/` (so it contains `model.lgb`, `features.yaml`, etc.).
 3. Run the inference-only scripts:
    - **Windows**:
@@ -82,9 +86,16 @@ If you have downloaded our pre-trained checkpoint and want to generate the dashb
 
 ---
 
-## 📓 Notebook Execution Order
+## 📓 Alternative: Run Step-by-Step Using Notebooks
 
-**Start here → open `notebooks/00_run_guide.ipynb`** — it audits which files already exist and tells you exactly which steps to run.
+> ⚠️ **PREREQUISITE:** Before running any notebooks, you **MUST** complete the virtual environment setup:
+> 1. Create venv: `python -m venv venv`
+> 2. Activate: `venv\Scripts\activate.bat` (Windows) or `source venv/bin/activate` (Linux/Mac)
+> 3. Install dependencies: `pip install -r requirements.txt`
+>
+> If you skip this step, notebooks will fail with missing module errors.
+
+If you prefer to run the pipeline step-by-step in an interactive notebook environment (instead of executing the full pipeline at once), follow the notebook execution order below. This gives you visibility into each stage, allows you to inspect intermediate outputs, and makes debugging easier.
 
 | # | Notebook | What it does | Runtime |
 |---|----------|--------------|---------|
@@ -133,7 +144,7 @@ venv\Scripts\jupyter nbconvert --to notebook --execute notebooks/06_shap.ipynb
 | | `quarter` | Calendar quarter (1-4) |
 | | `is_month_start/end` | Payday/quota pressure indicator |
 | | `is_weekend` | Saturday + Sunday flag |
-| **Zone aggregates** | `zone_mean_count` | Mean violation count per zone (training period only) |
+| **Zone aggregates** | `zone_eb_shrunk_mean_count` | Empirical-Bayes shrunk mean violation count (handles sparsity/zero-inflation) |
 | | `zone_median_count` | Median — robust to enforcement surges |
 | | `zone_cis_score` | CIS score from `cis_table.parquet` |
 | | `zone_junction_frac` | Fraction of violations at junctions in this zone |
@@ -145,6 +156,7 @@ venv\Scripts\jupyter nbconvert --to notebook --execute notebooks/06_shap.ipynb
 | | `violation_count_lag_1h` | Exact violation count 1 hour ago |
 | | `violation_count_lag_24h` | Exact violation count 24 hours ago |
 | | `violation_count_lag_7d` | Exact violation count exactly 1 week ago |
+| | `spatial_lag_1h_count` | Balloon-effect feature: Mean 1h lag of neighboring zones within 2.0 km |
 | **Categorical** | `dominant_violation_type` | Mode violation type in this zone×time block |
 | | `dominant_vehicle_type` | Mode vehicle type in this zone×time block |
 | | `violation_type_primary_encoded` | Encoded primary violation type |
@@ -184,10 +196,10 @@ Two tiers of ranking metrics are computed. The per-hour tier is the primary diff
 
 | Metric | Description | Current result |
 |---|---|---|
-| **MAE** | Mean absolute error in predicted violation count per zone-hour | **4.31** (LightGBM/hour) |
-| **RMSE** | Root mean squared error (penalizes spike errors) | **10.07** |
-| **Naive MAE** | Frequency baseline (no ML — ranks by raw historical count) | 6.97 |
-| **ML Lift %** | `(Naive_MAE - ML_MAE) / Naive_MAE × 100` | **+38.2%** |
+| **MAE** | Mean absolute error in predicted violation count per zone-hour | **3.51** (LightGBM/hour w/ EB Shrinkage) |
+| **RMSE** | Root mean squared error (penalizes spike errors) | **8.82** |
+| **Naive MAE** | Frequency baseline (no ML — ranks by raw historical count) | 6.86 |
+| **ML Lift %** | `(Naive_MAE - ML_MAE) / Naive_MAE × 100` | **+48.8%** |
 
 ### Tier 2 — Ranking (zone ordering quality)
 
@@ -195,6 +207,8 @@ Two tiers of ranking metrics are computed. The per-hour tier is the primary diff
 |---|---|---|
 | **Aggregate NDCG@10** | NDCG over the full test period | Uninformative (both model and baseline score 1.0 — top-10 zones are globally stable) |
 | **Per-hour NDCG@10** ⭐ | NDCG computed per `(date × hour)` slot, then averaged | **Primary differentiator** — model must predict *which zone peaks at 2am vs 9am* |
+| **Capture@K** | Fraction of severe violations out-of-sample actually captured by ranking | Evaluates business-value against a fixed patrol budget |
+| **PAI (Predictive Accuracy Index)** | `(Capture@K) / (Area_of_Top_K / Total_Area)` | standard police metric: hit rate relative to patrol area required |
 | **Per-hour Spearman ρ** | Rank correlation per hour slot | Measures fine-grained zone ordering quality within each hour |
 | **Per-hour Precision@10** | Fraction of predicted top-10 in true top-10, per hour | Operational precision — how often would an officer be in the right place |
 | **Frequency baseline per-hour** | Same metrics for the static baseline (no ML) | Comparison reference — ML must beat this to be useful |
@@ -229,59 +243,31 @@ After every retrain, the notebook checks:
 
 ---
 
-## 🗺️ Demo Output
+## 🗺️ Generated Output Files
 
-### Interactive enforcement map with 24-hour time slider
+After running the pipeline (whether full training or inference-only), the following files are generated in `data/outputs/`:
 
-Generated by `notebooks/05_inference.ipynb` → `generate_static_output_with_slider()`.
+### Interactive Enforcement HTML Map
 
-```
-data/outputs/enforcement_slider_DATE.html
-```
+**File:** `enforcement_priority_YYYY-MM-DD_HHh.html`
 
-Open in Chrome (works **fully offline** — no internet required at the venue).
+Opens in any web browser (Chrome/Firefox/Edge). Works **fully offline** — no internet required.
 
 **Features:**
-- Leaflet.js map with colour-coded zone markers (red = HIGH, orange = MEDIUM, green = LOW)
-- Hour slider 0–23 — zone markers and priority table update in real-time
-- Quick-access buttons: 🌅 9am | ☀️ 12pm | 🌆 6pm | 🌙 11pm
-- Model scorecard panel (MAE, RMSE, ML Lift %, NDCG@10)
+- Leaflet.js map with colour-coded zone markers (Red=HIGH, Orange=MEDIUM, Green=LOW priority)
+- Interactive zone markers showing predicted violation counts and CIS scores
+- Model performance scorecard (MAE, RMSE, ML Lift %, Per-Hour NDCG@10)
+- Fully static HTML — no server needed
 
-### Priority table CSV
+### Priority Schedule CSV
 
-```
-data/outputs/day_schedule_DATE.csv
-```
+**File:** `day_schedule_YYYY-MM-DD.csv`
 
-Top-K zones across all 24 hours — suitable for police vehicle route planning.
+Top-K enforcement zones across all 24 hours, ranked by priority score. Suitable for patrol route planning.
 
 ---
 
-## ⚠️ Limitations (Honest Assessment)
 
-| Limitation | Impact | Notes |
-|---|---|---|
-| **NDCG ceiling at aggregate level** | All models + baseline score 1.0 on global NDCG@10 | Not a bug — a property of the dataset. Use per-hour NDCG as the primary metric. |
-| **DBSCAN silhouette near zero** | Silhouette of −0.096 on tuned params | Reflects genuine spatial sparsity of urban violation data, not clustering failure. Zones are visually coherent. Re-tune on full 268K dataset (see Phase 4 in task.md). |
-| **Zone aggregate cold-start** | New zones not seen in training receive mean-count as default | Conservative fallback. Quarterly re-clustering mitigates this. |
-| **No real-time data** | Batch-only system; outputs are pre-computed | Would require streaming ingestion (Kafka/Flink) for live deployment. |
-| **No road-type data** | CIS uses junction presence as proxy for road classification | External datasets prohibited by hackathon rules. Junction weight is defensible but approximate. |
-| **Static zone boundaries** | DBSCAN zones frozen at training time | Requires periodic re-clustering as new data arrives. Roadmap: HDBSCAN for dynamic boundaries. |
-| **5-week test window** | Mar 1 – Apr 8 2024 only (5.5 weeks) | Limited by competition dataset. Longer test periods would give more reliable per-hour NDCG estimates. |
-| **Hourly granularity only** | Cannot schedule patrol windows < 1 hour | Dataset lacks reliable sub-hour resolution. |
-
----
-
-## 🚀 Roadmap
-
-- Real-time ingestion pipeline (Kafka + Flink) replacing batch CSV
-- Sub-hourly prediction (15-minute windows) with richer temporal features
-- MapmyIndia traffic speed integration to validate and calibrate CIS formula
-- HDBSCAN for dynamic zone boundary updates without full retraining
-- Uncertainty quantification (prediction intervals) for officer confidence scores
-- Multi-city deployment (pipeline is city-agnostic; re-tune eps/junction weights per city)
-
----
 
 ## 📁 Repository Structure
 
@@ -335,11 +321,13 @@ GridLock_R2_Transfer/
 ```
 priority_score(zone, t) = predicted_count(zone, t) × CIS(zone)
 
-CIS(zone) = violation_density_norm(zone) × junction_weight(zone)
+CIS(zone) = violation_density_norm(zone) × junction_weight(zone) × subtype_severity(zone)
 
   violation_density_norm = zone_violation_count / max_zone_violation_count
   junction_weight        = 1.5  if any violation in zone has is_at_junction = 1
                            1.0  otherwise
+  subtype_severity       = 2.8  if dominant type is "DOUBLE PARKING"
+                           1.5  if dominant type is "PARKING ON FOOTPATH", etc.
 ```
 
 Zones ranked descending by `priority_score`. Top-K output with tier labels:
@@ -358,9 +346,11 @@ The dashboard is a single-page static HTML file (`docs/index.html`) divided into
 
 - **Header / Navbar:** Displays the project title, the current date being viewed, and a "DEMO — TIME SLIDER" badge.
 - **Time Slider & Date Picker:** The core interactive control. A dropdown allows switching between a generated 7-day schedule, and a range slider (0-23) allows scrubbing through the hours of the day.
-- **Interactive Map:** Powered by Leaflet.js. It renders Bengaluru map tiles and plots the top-10 enforcement zones as color-coded circle markers (Red=HIGH, Orange=MEDIUM, Green=LOW tier). Clicking a marker shows a popup with the zone's specific metrics.
+- **Interactive Map:** Powered by Leaflet.js. It renders Bengaluru map tiles and plots the top-10 enforcement zones as color-coded circle markers (Red=HIGH, Orange=MEDIUM, Green=LOW tier). Hovering over a marker reveals a tooltip with the specific area name (e.g. `Silk Board (Madiwala Area)`). Clicking a marker opens a detailed GIS Information Card featuring:
+  - **Core Metrics:** Priority Score, Predicted Violations, and quantified **Economic Loss (INR)**.
+  - **GridLock Copilot (NLP Dispatch):** An interactive `<details>` accordion containing human-readable tactical dispatch instructions explaining why the hotspot was flagged.
 - **Model Evaluation Scorecard:** A static summary of the LightGBM model's performance metrics (MAE, ML Lift %, PAI, Per-Hour NDCG) fetched from the pipeline evaluation logs.
-- **Zone Table:** A ranked tabular view of the top-10 enforcement zones for the selected hour. It shows Rank, Zone ID, Priority Tier, Predicted Count, CIS Score, and Junction status.
+- **Zone Table:** A ranked tabular view of the top-10 enforcement zones for the selected hour. It shows Rank, Zone ID, Meaningful Location Name (with precise coordinates), Priority Tier, Predicted Count, CIS Score, and Junction status.
 - **KPI Dashboard:** Three dynamic top-level numbers for the currently selected hour: Critical Junctions (High), Active Hotspots (High/Med tiers), and the Average CIS Score of those hotspots.
 - **Charts:**
   - **24-Hour Violation Trend (Line Chart):** Shows the total predicted violations across all 24 hours of the *currently selected date*. Gives a bird's-eye view of the traffic pattern for the day.
@@ -387,14 +377,7 @@ Because the frontend is entirely decoupled from the backend:
    ```
    This will run inference and rewrite the `docs/index.html` file with fresh data.
 
-## 🔮 Future Improvements
 
-- **Real-time API Integration:** Instead of pre-baking JSON into the HTML file, the dashboard could fetch data from a live REST API (e.g. FastAPI) allowing for infinite historical querying and real-time streaming updates.
-- **Authentication:** Add a login layer for traffic police officers, serving specific patrol routes based on their assigned precinct.
-- **Dynamic Zones:** Implement HDBSCAN so that zone boundaries can dynamically adapt to emerging violation hotspots without requiring a full manual retrain.
-- **Live Traffic Layer:** Pull live congestion data from MapmyIndia or Google Maps APIs and overlay it on the Leaflet map to visually validate the predicted parking hotspots.
-
----
 
 *Built for the Flipkart Gridlock 2.0 Hackathon — PS1: Poor Visibility on Parking-Induced Congestion.*
 *Dataset: Bengaluru Police Violation Data, Nov 2023 – Apr 2024 (268K rows after dedup).*

@@ -42,6 +42,7 @@ historical:
                          # Expected to be top SHAP feature after training.
   - rolling_std_7d
   - violation_count_lag_1h
+  - spatial_lag_1h_count
   - lag_24h
   - lag_7d
 
@@ -58,8 +59,8 @@ historical:
 # Computed in: src/data/features.py  aggregate_to_zone_grid()  (Phase B)
 # Also added separately as zone-static features in _add_zone_aggregate_features()
 zone_aggregates:
-  - zone_mean_count      # float — mean zone_hour_violation_count over training period
-                         # Captures zone-level baseline activity (replaces zone_id lookup)
+  - zone_eb_shrunk_mean_count # float — Empirical-Bayes smoothed mean zone violation count
+                         # Heavily smooths low-volume/noisy zones toward the global mean
   - zone_median_count    # float — median zone_hour_violation_count over training period
                          # Robust to outlier enforcement surges
   - zone_cis_score       # float — CIS score (junction_weight × violation_density) per zone
@@ -67,6 +68,7 @@ zone_aggregates:
   - zone_total_count     # int   — total violations in zone over training period
                          # Absolute scale signal (some zones are larger / more active)
   - peak_hour_flag       # int [0, 1] — 1 if the current hour is the peak hour for this zone
+  - zone_peak_hour_ratio # float — fraction of a zone's total violations occurring in peak hours (8-10am, 5-7pm)
 
 # ── Spatial Features ──────────────────────────────────────────────
 # fraction_at_junction is time-block-level (varies per zone×hour).
@@ -74,6 +76,8 @@ zone_aggregates:
 spatial:
   - fraction_at_junction # float [0, 1] — fraction of violations at a junction in this time block
                          # This is the time-varying version; zone_junction_frac is the static version.
+  - fraction_two_wheeler # float [0, 1] — fraction of two-wheelers in this time block
+  - fraction_heavy_vehicle # float [0, 1] — fraction of heavy vehicles in this time block
 
 # ── Categorical Features (label-encoded) ─────────────────────────
 # All encoded with sklearn LabelEncoder. Mappings saved alongside model checkpoint.
@@ -142,11 +146,11 @@ encodings:
 
 # ── Version / Metadata ────────────────────────────────────────────
 # ── Version / Metadata ────────────────────────────────────────────
-version: "3.0"
-last_updated: "2026-06-20"
-updated_by: "Gemini 3.1 Pro (High)"
-basis: "Action 2.2 Feature Pruning (CatBoost SHAP CB-3). Pruned features with < 2% relative importance: month (1.7%), zone_junction_frac (1.6%)."
+version: "3.1"
+last_updated: "2026-06-22"
+updated_by: "Antigravity"
+basis: "Mathematical Regularization (Empirical-Bayes Shrinkage) to smooth noisy/low-volume zones toward the global mean."
 note: >
-  Features v3.0: Removed noisy/unhelpful features based on SHAP analysis.
+  Features v3.1: Replaced zone_mean_count with zone_eb_shrunk_mean_count.
   Do not change feature names without: (1) updating this file, (2) appending to
   session_log.md, (3) retraining from scratch.
