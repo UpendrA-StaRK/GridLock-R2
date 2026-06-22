@@ -74,7 +74,29 @@
     .score-sub { font-size: 10px; color: #95a5a6; margin-top: 3px; }
 
     footer { text-align: center; padding: 14px; font-size: 11px; color: #999; border-top: 1px solid #ddd; background: white; }
-    @media (max-width: 900px) { .container { grid-template-columns: 1fr; } #map-container, #zone-table-card { grid-column: 1; } }
+    @media (max-width: 900px) { 
+      .container { grid-template-columns: 1fr; } 
+      #map-container, #zone-table-card, .card { grid-column: 1 !important; } 
+    }
+    @media (max-width: 600px) {
+      header { flex-direction: column; align-items: flex-start; gap: 12px; padding: 16px; }
+      header > div { text-align: left !important; width: 100%; display: flex; flex-direction: column; gap: 4px; }
+      header > div:last-child { flex-direction: row; justify-content: space-between; align-items: center; margin-top: 8px; }
+      header > div:last-child p { margin-top: 0 !important; }
+      header h1 { font-size: 16px; }
+      .slider-bar { flex-direction: column; align-items: stretch; gap: 12px; padding: 16px; }
+      .slider-label { margin-left: 0 !important; font-size: 14px; }
+      #date-select { width: 100%; padding: 8px !important; font-size: 14px !important; }
+      #hour-slider { width: 100%; margin: 8px 0; }
+      #hour-display { width: 100%; box-sizing: border-box; }
+      .time-icons { justify-content: space-between; width: 100%; }
+      .container { padding: 12px; gap: 16px; }
+      #map-container { height: 350px; padding: 8px; }
+      .scorecard-grid { grid-template-columns: 1fr; }
+      .score-block { grid-column: 1 !important; }
+      .card-body { padding: 12px; }
+      table { min-width: 700px; }
+    }
   </style>
 </head>
 <body>
