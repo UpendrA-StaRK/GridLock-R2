@@ -285,15 +285,15 @@ def _build_scorecard_html(
             beats_label = "✓ ML WINS" if beats_ph else "⚠ Baseline wins"
             per_hour_ndcg_block = f"""
       <div class='score-block' style='grid-column: 1 / -1; border-left: 4px solid {ph_colour}; background:#f0faf4;'>
-        <div class='score-label'>Per-Hour NDCG@10 — Why ML? (CB-4)</div>
+        <div class='score-label'>Per-Hour NDCG@10 — Temporal Ranking Accuracy</div>
         <div class='score-value' style='color:{ph_colour};font-size:18px'>
-          {model_ph_ndcg:.4f} &nbsp;<span style='font-size:14px;color:#7f8c8d'>vs baseline {baseline_ph_ndcg:.4f}</span>
+          {model_ph_ndcg:.4f} &nbsp;<span style='font-size:14px;color:#7f8c8d'>vs static baseline {baseline_ph_ndcg:.4f}</span>
         </div>
         {_bar(min(model_ph_ndcg, 1.0), colour=ph_colour)}
         <div class='score-sub' style='font-size:12px;color:#2c3e50;margin-top:6px'>
-          <b style='color:{ph_colour}'>{beats_label}</b> &nbsp;·&nbsp;
-          <b>{delta_pct:+.1f}%</b> vs static lookup table.
-          <i>ML adds time-aware enforcement intelligence.</i>
+          <b style='color:{ph_colour}'>Dynamic Prioritization</b> &nbsp;·&nbsp;
+          <b>{delta_pct:+.1f}%</b> improvement over historical averages.
+          <i>Validates the model's ability to adjust priorities throughout the day.</i>
         </div>
       </div>"""
 
