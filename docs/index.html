@@ -624,7 +624,10 @@ updateDisplay();
 setInterval(() => {
   const now = new Date();
   const el = document.getElementById('live-clock');
-  if (el) el.innerText = now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+  if (el) {
+    const istTime = new Date(now.getTime() + (330 * 60000));
+    el.innerText = istTime.toISOString().replace('T', ' ').substring(0, 19) + ' IST';
+  }
 }, 1000);
 </script>
 
