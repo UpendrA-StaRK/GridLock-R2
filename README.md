@@ -168,17 +168,19 @@ venv\Scripts\jupyter notebook
 venv\Scripts\jupyter nbconvert --to notebook --execute notebooks/06_shap.ipynb
 ```
 
-## 🎯 Zone Generation: Why DBSCAN `eps=0.03`?
+## 🎯 Zone Generation: Why DBSCAN?
 
 Rather than forcing parking violations into artificial administrative boundaries (like police station jurisdictions), we use **DBSCAN (Density-Based Spatial Clustering of Applications with Noise)** to dynamically discover where violations *actually* cluster in the real world. 
 
+### Why not H3 Resolution-9 Hexagons?
+H3 imposes a rigid, arbitrary mathematical grid over the real world. A natural congestion hotspot (like a major traffic junction) will frequently fall right on the boundary of 2 or 3 adjacent hexagons. This artificially splits and dilutes the true violation density across multiple cells, severely degrading its enforcement priority ranking. Furthermore, fixed grids create extreme data sparsity by covering empty spaces (lakes, parks). DBSCAN organically wraps around the actual roads where violations occur and ignores empty space.
+
+### Tuning the Sweet Spot (`eps=0.03`)
 Through hyperparameter tuning (`notebooks/02_cluster_tuning.ipynb`), we locked `eps=0.03` as the operational sweet spot for **Targeted Enforcement**:
 - **Why not `eps=0.08`?** The clusters become too broad. A single "zone" might cover an entire neighborhood. Dispatching a single patrol car to "Koramangala" is not targeted.
 - **Why not `eps=0.01`?** The algorithm generates thousands of tiny micro-zones (e.g., a single 10-meter stretch of road). This fragments the dataset too much, destroying the ML model's ability to learn historical patterns, and clutters the dashboard map.
-- **The `0.03` Sweet Spot:** At this radius (~166 meters), the algorithm groups violations into roughly ~228 distinct micro-hotspots across Bengaluru. Geographically, this translates to clusters roughly the size of a **major intersection and its immediate spillover streets** (e.g., Silk Board Junction). This perfectly matches real-world operational capacity: a single traffic cop or towing vehicle can effectively manage a zone of this exact size.
-- **Memory Optimization (11m Spatial Collapse):** DBSCAN natively struggles with memory allocation (`MemoryError`) on 268k raw floating-point GPS coordinates because microscopic precision (6+ decimal places) treats almost every row as mathematically distinct, forcing an $O(N^2)$ distance matrix explosion. 
-  - *Why not 5 decimal places (~1.1m precision)?* Standard mobile GPS accuracy fluctuates by 5-15 meters. At 1.1m precision, jittery coordinates for the exact same parked car would still be treated as distinct points, failing to resolve the memory crash.
-  - *Why 4 decimal places (~11m precision)?* This is the sweet spot. It effectively absorbs natural GPS drift and collapses thousands of identical points within an 11-meter radius (about the length of two parked cars) into single mathematical points. This shrinks the pairwise distance matrix exponentially, allowing the pipeline to run instantly on low-RAM consumer hardware without losing real-world geographic accuracy.
+- **The `0.03` Sweet Spot:** At this radius (~166 meters), the algorithm groups violations into roughly ~228 distinct micro-hotspots across Bengaluru. Geographically, this translates to clusters roughly the size of a **major intersection and its immediate spillover streets** (e.g., Silk Board Junction). This perfectly matches real-world operational capacity.
+- **Memory Optimization:** Collapsing GPS coordinates to 4 decimal places (~11m precision) absorbs natural GPS drift and shrinks the $O(N^2)$ distance matrix, allowing DBSCAN to run instantly on consumer hardware without crashing.
 
 ---
 
@@ -268,6 +270,21 @@ Two tiers of ranking metrics are computed. The per-hour tier is the primary diff
 | **PAI (Predictive Accuracy Index)** | `(Capture@K) / (Area_of_Top_K / Total_Area)` | standard police metric: hit rate relative to patrol area required |
 | **Per-hour Spearman ρ** | Rank correlation per hour slot | Measures fine-grained zone ordering quality within each hour |
 
+### 📈 Model Improvement Tracker
+
+| Version | Key Improvements | MAE | RMSE | NDCG@10 |
+|---|---|---|---|---|
+| Baseline | Initial Pipeline (XGBoost) | 4.6800 | - | 1.0000 |
+| v1 | Shift to LightGBM (Tweedie) | 4.3064 | 10.0694 | 0.8942 |
+| v2 | Spatial Lags, Copilot NLP & EB Shrinkage | 3.5153 | 8.8250 | 1.0000 |
+| v3 | FastAPI Backend & Micro-cluster Tuning | 2.9674 | 6.5840 | 1.0000 |
+
+**Summary of Evolution:**
+- **Baseline:** Established the initial benchmark using XGBoost with an MAE of 4.68 and a perfect global NDCG@10.
+- **v1:** Shifted to LightGBM using Tweedie loss to natively handle zero-inflated distributions, dropping MAE to 4.30.
+- **v2:** Major overhaul introducing Subtype-Weighted Parking Severity, spatial lags, GridLock Copilot dispatch strategies, and Empirical-Bayes shrinkage. This regularised noisy zones, slashing MAE to 3.51.
+- **v3:** Transformed the static HTML into a dynamic API-driven dashboard (FastAPI) and tuned DBSCAN for tighter micro-clusters (eps=0.03). Achieved the final record-breaking MAE of 2.96 and RMSE of 6.58.
+
 ---
 
 ## 🔍 SHAP Explainability
@@ -345,17 +362,25 @@ GridLock_R2_Transfer/
 
 ## 📊 Ranking Formula & CIS
 
-```
+```text
 priority_score(zone, t) = predicted_count(zone, t) × CIS(zone)
 
-CIS(zone) = violation_density_norm(zone) × junction_weight(zone) × subtype_severity(zone)
+CIS(zone) = violation_density_norm(zone) × junction_weight(zone) × avg_subtype_severity(zone)
 
   violation_density_norm = zone_violation_count / max_zone_violation_count
   junction_weight        = 1.5  if any violation in zone has is_at_junction = 1
                            1.0  otherwise
-  subtype_severity       = 2.8  if dominant type is "DOUBLE PARKING"
+  avg_subtype_severity   = 2.8  if dominant type is "DOUBLE PARKING"
                            1.5  if dominant type is "PARKING ON FOOTPATH", etc.
 ```
+
+### Why Subtype-Weighted Severity?
+Not all parking violations cause equal congestion. 100 cars parked on a footpath cause less traffic gridlock than 100 cars double-parked on a main arterial road. To capture this operational reality without requiring external road-network datasets, we introduced a **severity multiplier** based on the specific violation subtype:
+- **High Severity (2.8 - 3.0):** `PARKING IN A MAIN ROAD`, `DOUBLE PARKING`
+- **Medium Severity (2.0 - 2.5):** `PARKING NEAR ROAD CROSSING`, `PARKING NEAR TRAFFIC LIGHT/ZEBRA CROSS`, `PARKING NEAR BUSTOP`
+- **Low Severity (1.0 - 1.5):** `PARKING ON FOOTPATH`, general `WRONG PARKING` (default)
+
+By multiplying the predicted violation count by the average subtype severity of that zone, the model correctly elevates severe arterial blockages to the top of the priority list, ensuring enforcement isn't wasted on high-volume but low-impact peripheral parking.
 
 Zones ranked descending by `priority_score`. Top-K output with tier labels:
 
