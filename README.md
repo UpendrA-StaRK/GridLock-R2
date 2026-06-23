@@ -8,6 +8,8 @@
 
 ## 🗺️ Architecture Overview
 
+The project uses a dynamic client-server architecture for lightning-fast interactive inference.
+
 ```mermaid
 flowchart TD
     Raw["Raw CSV
@@ -56,9 +58,9 @@ flowchart TD
     Stage1 --> Stage2
     Stage2 --> Stage3
 
-    classDef transGreen fill:none,stroke:#27AE60,stroke-width:2px,color:inherit;
-    classDef transLavender fill:none,stroke:#9B59B6,stroke-width:1.5px,color:inherit;
-    classDef transBlue fill:none,stroke:#2980B9,stroke-width:2px,color:inherit;
+    classDef transGreen fill:none,stroke:#27AE60,stroke-width:2px,color:#FFF;
+    classDef transLavender fill:none,stroke:#9B59B6,stroke-width:1.5px,color:#FFF;
+    classDef transBlue fill:none,stroke:#2980B9,stroke-width:2px,color:#FFF;
 
     class Raw transGreen;
     class Step1,Step2,Step3,Step4,Step5,Step6,Stage1,Stage2 transLavender;
