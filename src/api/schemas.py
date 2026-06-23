@@ -24,6 +24,7 @@ class Hotspot(BaseModel):
     dispatch_strategy: str
     nlp_explanation: str
     area_name: str
+    police_station: str
     lat: float
     lon: float
 

@@ -41,6 +41,9 @@ async def get_hotspots(
         top_k_df["lat"] = top_k_df["lat"].fillna(0.0)
         top_k_df["lon"] = top_k_df["lon"].fillna(0.0)
         top_k_df["area_name"] = top_k_df["area_name"].fillna("Unknown Area")
+        if "police_station" not in top_k_df.columns:
+            top_k_df["police_station"] = "Unknown"
+        top_k_df["police_station"] = top_k_df["police_station"].fillna("Unknown")
         
         records = top_k_df.to_dict(orient="records")
         # Cast boolean explicitly to match schema
