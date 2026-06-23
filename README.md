@@ -8,34 +8,75 @@
 
 ## 🗺️ Architecture Overview
 
-```text
-Raw CSV (298K rows)
-    │
-    ▼
-[Step 1] Schema Validation          validate.py        8 hard checks; fails loudly on any breach
-    │
-    ▼
-[Step 2] Ingestion & Dedup          load.py            dtype cast, 15 leakage cols dropped,
-    │                                                  minute-level dedup (268K rows retained)
-    ▼
-[Step 3] Row-level Features         features.py        temporal + spatial + categorical
-    │
-    ▼
-[Step 4] Geospatial Clustering      clustering.py      DBSCAN + Geospatial Medoids → 139 zones + CIS
-    │
-    ▼
-[Step 5] Zone × Time Grid           features.py        aggregate to zone×hour / zone×day
-    │                                                  zone aggregate features & spatial lag computed here
-    ▼
-[Stage 1] ML Hotspot Predictor      train.py           LightGBM (Winner of 3-algorithm eval)
-    │                                                  no zone_id leakage
-    ▼
-[Stage 2] API Backend (FastAPI)     src/api/main.py    Loads model into RAM. Serves dynamic predictions via /predict
-    │
-    ▼
-[Stage 3] Web Dashboard             docs/index.html    Fetches predictions dynamically via AJAX.
-                                                       Renders interactive Leaflet map and Copilot instructions.
+```mermaid
+flowchart TD
+    Raw["Raw CSV
+    (298K rows)"]
+    
+    Step1["[Step 1] Schema Validation
+    (validate.py)"]
+    
+    Step2["[Step 2] Ingestion & Dedup
+    (load.py)"]
+    
+    Step3["[Step 3] Row-Level Features
+    (features.py)"]
+    
+    Step4["[Step 4] Geospatial Clustering
+    (clustering.py)"]
+    
+    Step5["[Step 5] CIS Computation
+    (clustering.py)"]
+    
+    Step6["[Step 6] Zone Grid Aggregation
+    (features.py)"]
+    
+    Stage1["[Stage 1] ML Hotspot Predictor
+    (train.py)"]
+    
+    Stage2["[Stage 2] API Backend (FastAPI)
+    (src/api/main.py)"]
+    
+    Stage3["[Stage 3] Web Dashboard
+    (docs/index.html)"]
+
+    Raw --> Step1
+    Step1 --> Step2
+    Step2 --> Step3
+    Step3 --> Step4
+    
+    %% Branching after Clustering assigns zone_id
+    Step4 --> Step5
+    Step4 --> Step6
+    
+    %% Merging to predictor
+    Step5 --> Stage1
+    Step6 --> Stage1
+    
+    Stage1 --> Stage2
+    Stage2 --> Stage3
+
+    classDef transGreen fill:none,stroke:#27AE60,stroke-width:2px,color:inherit;
+    classDef transLavender fill:none,stroke:#9B59B6,stroke-width:1.5px,color:inherit;
+    classDef transBlue fill:none,stroke:#2980B9,stroke-width:2px,color:inherit;
+
+    class Raw transGreen;
+    class Step1,Step2,Step3,Step4,Step5,Step6,Stage1,Stage2 transLavender;
+    class Stage3 transBlue;
 ```
+
+### 🔄 Pipeline Execution Flow
+
+For a clear understanding of how data flows through the diagram above:
+
+1. **Ingest & Validate (Steps 1 & 2):** Ingests the `Raw CSV`, runs a strict 8-check schema validation (`validate.py`), casts types, and filters/deduplicates invalid records (`load.py`).
+2. **Row-Level Feature Engineering (Step 3):** Encodes cyclical temporal features (sin/cos on hour and day-of-week) to preserve time-continuity, along with categorical/spatial proximity variables (`features.py`).
+3. **Geospatial Clustering (Step 4):** Groups spatial coordinates using **DBSCAN** to isolate parking congestion hot-spots and assigns a unique `zone_id` to each record (`clustering.py`).
+4. **Parallel Tracks (Steps 5 & 6):**
+   - **CIS Computation:** Calculates the **Congestion Impact Score** per zone based on density, junction proximity, and severity (`clustering.py`).
+   - **Zone Grid Aggregation:** Aggregates row-level data into `zone x hour` and `zone x day` grids, computing rolling historical lag features (`features.py`).
+5. **Model Training (Stage 1):** Merges the spatial features (CIS table) and temporal features (aggregated grids) to train and compare candidate models (LightGBM/XGBoost/CatBoost) using a time-based train/test split (`train.py`).
+6. **Inference & Serving (Stages 2 & 3):** The **FastAPI Backend** loads the trained model checkpoint to dynamically serve predicted violations (`main.py`), which the **Web Dashboard** (`index.html`) fetches and displays interactively.
 
 ---
 
