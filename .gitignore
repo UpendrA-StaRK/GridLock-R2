@@ -15,15 +15,17 @@ catboost_info/
 
 # Project Data (raw, processed, and generated outputs)
 data/raw/
-data/processed/
-data/outputs/
+# We MUST upload processed/ and checkpoints/ to GitHub so the web app can load the models!
+# data/processed/
+# data/outputs/
 
 # Trained ML Model Checkpoints
-checkpoints/
+# checkpoints/
 
 # Always include docs/ (slider HTML is the demo artifact)
 !docs/
 !docs/**
+docs/api/
 
 # ── Session / run artifacts (auto-generated, not project code) ──────────────
 progress/

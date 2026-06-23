@@ -2,6 +2,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from loguru import logger
 from pathlib import Path
 
@@ -40,3 +41,6 @@ app.add_middleware(
 app.include_router(system.router, prefix="/api/v1/system", tags=["System"])
 app.include_router(predictions.router, prefix="/api/v1/predictions", tags=["Predictions"])
 app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
+
+# Serve frontend statically
+app.mount("/", StaticFiles(directory=Path(__file__).resolve().parent.parent.parent / "docs", html=True), name="docs")

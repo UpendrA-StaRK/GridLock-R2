@@ -1,0 +1,26 @@
+{
+  "passed": true,
+  "errors": [],
+  "warnings": [
+    "created_datetime: 5 unparseable rows (will be dropped in load.py). EDA baseline = 5 \u2014 acceptable.",
+    "LEAKAGE/EXCLUDED COLUMNS PRESENT (will be dropped in load.py): ['data_sent_to_scita_timestamp', 'modified_datetime', 'validation_status', 'validation_timestamp', 'updated_vehicle_number', 'updated_vehicle_type']"
+  ],
+  "stats": {
+    "lat_out_of_bounds": 0,
+    "lon_out_of_bounds": 0,
+    "lat_null": 0,
+    "lon_null": 0,
+    "datetime_null": 5,
+    "datetime_min": "2023-11-09 19:11:46+00:00",
+    "datetime_max": "2024-04-08 17:30:46+00:00",
+    "missing_calendar_days": [],
+    "null_column_audit": {
+      "description": 0,
+      "closed_datetime": 0,
+      "action_taken_timestamp": 0
+    },
+    "violation_type_parse_failures_in_sample": 0,
+    "train_rows": 212649,
+    "test_rows": 84165
+  }
+}

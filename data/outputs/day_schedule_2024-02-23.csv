@@ -1,0 +1,41 @@
+hour,rank,zone_id,predicted_count,dominant_violation_type,cis_score,has_junction,priority_tier,formula_version,priority_score,nlp_explanation,dispatch_strategy
+7,1,94,32.61,WRONG PARKING,1.5539953701719038,1,HIGH,2.0,50.6758,High risk of cascading junction congestion.,Junction spillover management.
+7,2,110,12.63,WRONG PARKING,0.8834854307956426,1,LOW,2.0,11.1584,High risk of cascading junction congestion.,Low priority - monitor only.
+7,3,129,15.65,WRONG PARKING,0.5699042449980377,1,LOW,2.0,8.919,High risk of cascading junction congestion.,Low priority - monitor only.
+7,4,61,7.47,PARKING IN A MAIN ROAD,0.3357375724355188,0,LOW,2.0,2.508,High volume of stationary violations.,Low priority - monitor only.
+7,5,213,19.31,WRONG PARKING,0.07056152687296417,0,LOW,2.0,1.3625,High volume of stationary violations.,Low priority - monitor only.
+8,1,94,32.78,WRONG PARKING,1.5539953701719038,1,HIGH,2.0,50.94,High risk of cascading junction congestion.,Junction spillover management.
+8,2,110,13.08,WRONG PARKING,0.8834854307956426,1,LOW,2.0,11.556,High risk of cascading junction congestion.,Low priority - monitor only.
+8,3,129,15.8,WRONG PARKING,0.5699042449980377,1,LOW,2.0,9.0045,High risk of cascading junction congestion.,Low priority - monitor only.
+8,4,61,7.61,PARKING IN A MAIN ROAD,0.3357375724355188,0,LOW,2.0,2.555,High volume of stationary violations.,Low priority - monitor only.
+8,5,213,17.2,WRONG PARKING,0.07056152687296417,0,LOW,2.0,1.2137,High volume of stationary violations.,Low priority - monitor only.
+9,1,94,32.78,WRONG PARKING,1.5539953701719038,1,HIGH,2.0,50.94,High risk of cascading junction congestion.,Junction spillover management.
+9,2,110,13.31,WRONG PARKING,0.8834854307956426,1,LOW,2.0,11.7592,High risk of cascading junction congestion.,Low priority - monitor only.
+9,3,129,16.07,WRONG PARKING,0.5699042449980377,1,LOW,2.0,9.1584,High risk of cascading junction congestion.,Low priority - monitor only.
+9,4,61,7.58,PARKING IN A MAIN ROAD,0.3357375724355188,0,LOW,2.0,2.5449,High volume of stationary violations.,Low priority - monitor only.
+9,5,213,17.66,WRONG PARKING,0.07056152687296417,0,LOW,2.0,1.2461,High volume of stationary violations.,Low priority - monitor only.
+10,1,94,32.78,WRONG PARKING,1.5539953701719038,1,HIGH,2.0,50.94,High risk of cascading junction congestion.,Junction spillover management.
+10,2,110,13.31,WRONG PARKING,0.8834854307956426,1,LOW,2.0,11.7592,High risk of cascading junction congestion.,Low priority - monitor only.
+10,3,129,16.07,WRONG PARKING,0.5699042449980377,1,LOW,2.0,9.1584,High risk of cascading junction congestion.,Low priority - monitor only.
+10,4,61,7.58,PARKING IN A MAIN ROAD,0.3357375724355188,0,LOW,2.0,2.5449,High volume of stationary violations.,Low priority - monitor only.
+10,5,213,17.66,WRONG PARKING,0.07056152687296417,0,LOW,2.0,1.2461,High volume of stationary violations.,Low priority - monitor only.
+17,1,94,32.25,WRONG PARKING,1.5539953701719038,1,HIGH,2.0,50.1164,High risk of cascading junction congestion.,Junction spillover management.
+17,2,110,12.02,WRONG PARKING,0.8834854307956426,1,LOW,2.0,10.6195,High risk of cascading junction congestion.,Low priority - monitor only.
+17,3,129,14.28,WRONG PARKING,0.5699042449980377,1,LOW,2.0,8.1382,High risk of cascading junction congestion.,Low priority - monitor only.
+17,4,61,7.65,PARKING IN A MAIN ROAD,0.3357375724355188,0,LOW,2.0,2.5684,High volume of stationary violations.,Low priority - monitor only.
+17,5,213,17.73,WRONG PARKING,0.07056152687296417,0,LOW,2.0,1.2511,High volume of stationary violations.,Low priority - monitor only.
+18,1,94,32.25,WRONG PARKING,1.5539953701719038,1,HIGH,2.0,50.1164,High risk of cascading junction congestion.,Junction spillover management.
+18,2,110,12.02,WRONG PARKING,0.8834854307956426,1,LOW,2.0,10.6195,High risk of cascading junction congestion.,Low priority - monitor only.
+18,3,129,14.28,WRONG PARKING,0.5699042449980377,1,LOW,2.0,8.1382,High risk of cascading junction congestion.,Low priority - monitor only.
+18,4,61,7.65,PARKING IN A MAIN ROAD,0.3357375724355188,0,LOW,2.0,2.5684,High volume of stationary violations.,Low priority - monitor only.
+18,5,213,17.73,WRONG PARKING,0.07056152687296417,0,LOW,2.0,1.2511,High volume of stationary violations.,Low priority - monitor only.
+19,1,94,41.87,WRONG PARKING,1.5539953701719038,1,HIGH,2.0,65.0658,High risk of cascading junction congestion.,Junction spillover management.
+19,2,110,21.46,WRONG PARKING,0.8834854307956426,1,LOW,2.0,18.9596,High risk of cascading junction congestion.,Low priority - monitor only.
+19,3,129,17.92,WRONG PARKING,0.5699042449980377,1,LOW,2.0,10.2127,High risk of cascading junction congestion.,Low priority - monitor only.
+19,4,61,10.11,PARKING IN A MAIN ROAD,0.3357375724355188,0,LOW,2.0,3.3943,High volume of stationary violations.,Low priority - monitor only.
+19,5,213,21.1,WRONG PARKING,0.07056152687296417,0,LOW,2.0,1.4888,High volume of stationary violations.,Low priority - monitor only.
+20,1,94,41.44,WRONG PARKING,1.5539953701719038,1,HIGH,2.0,64.3976,High risk of cascading junction congestion.,Junction spillover management.
+20,2,110,24.05,WRONG PARKING,0.8834854307956426,1,LOW,2.0,21.2478,High risk of cascading junction congestion.,Low priority - monitor only.
+20,3,129,19.98,WRONG PARKING,0.5699042449980377,1,LOW,2.0,11.3867,High risk of cascading junction congestion.,Low priority - monitor only.
+20,4,61,10.77,PARKING IN A MAIN ROAD,0.3357375724355188,0,LOW,2.0,3.6159,High volume of stationary violations.,Low priority - monitor only.
+20,5,213,23.05,WRONG PARKING,0.07056152687296417,0,LOW,2.0,1.6264,High volume of stationary violations.,Low priority - monitor only.

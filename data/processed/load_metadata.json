@@ -1,0 +1,109 @@
+{
+  "source_file": "C:\\Users\\USER\\Desktop\\GridLock_R2_Transfer\\data\\raw\\jan to may police violation_anonymized791b166.csv",
+  "loaded_at": "2026-06-23T10:21:33.149702+00:00",
+  "rows_raw": 298450,
+  "cols_raw": 24,
+  "file_hash_sha256": "6e4b7ad2e4c713a65fe4f6a9782461f19911fad70d25132cb7aed0fa3c656438",
+  "validation_passed": true,
+  "validation_warnings": [
+    "created_datetime: 5 unparseable rows (will be dropped in load.py). EDA baseline = 5 \u2014 acceptable.",
+    "LEAKAGE/EXCLUDED COLUMNS PRESENT (will be dropped in load.py): ['data_sent_to_scita_timestamp', 'modified_datetime', 'validation_status', 'validation_timestamp', 'updated_vehicle_number', 'updated_vehicle_type']"
+  ],
+  "cols_dropped": [
+    "description",
+    "closed_datetime",
+    "action_taken_timestamp",
+    "data_sent_to_scita_timestamp",
+    "modified_datetime",
+    "validation_status",
+    "validation_timestamp",
+    "updated_vehicle_number",
+    "updated_vehicle_type",
+    "id",
+    "vehicle_number",
+    "location"
+  ],
+  "null_summary": {
+    "latitude": {
+      "null_count": 0,
+      "null_pct": 0.0,
+      "dtype": "float64"
+    },
+    "longitude": {
+      "null_count": 0,
+      "null_pct": 0.0,
+      "dtype": "float64"
+    },
+    "vehicle_type": {
+      "null_count": 0,
+      "null_pct": 0.0,
+      "dtype": "str"
+    },
+    "violation_type": {
+      "null_count": 0,
+      "null_pct": 0.0,
+      "dtype": "str"
+    },
+    "offence_code": {
+      "null_count": 0,
+      "null_pct": 0.0,
+      "dtype": "str"
+    },
+    "created_datetime": {
+      "null_count": 0,
+      "null_pct": 0.0,
+      "dtype": "datetime64[us, UTC]"
+    },
+    "device_id": {
+      "null_count": 0,
+      "null_pct": 0.0,
+      "dtype": "str"
+    },
+    "created_by_id": {
+      "null_count": 0,
+      "null_pct": 0.0,
+      "dtype": "str"
+    },
+    "center_code": {
+      "null_count": 11255,
+      "null_pct": 3.77,
+      "dtype": "str"
+    },
+    "police_station": {
+      "null_count": 0,
+      "null_pct": 0.0,
+      "dtype": "str"
+    },
+    "data_sent_to_scita": {
+      "null_count": 0,
+      "null_pct": 0.0,
+      "dtype": "int8"
+    },
+    "junction_name": {
+      "null_count": 0,
+      "null_pct": 0.0,
+      "dtype": "str"
+    }
+  },
+  "rows_before_dedup": 298445,
+  "rows_after_dedup": 268281,
+  "rows_dropped_dedup": 30164,
+  "rows_final": 268281,
+  "cols_final": 12,
+  "columns_retained": [
+    "latitude",
+    "longitude",
+    "vehicle_type",
+    "violation_type",
+    "offence_code",
+    "created_datetime",
+    "device_id",
+    "created_by_id",
+    "center_code",
+    "police_station",
+    "data_sent_to_scita",
+    "junction_name"
+  ],
+  "preview_train_rows": 191303,
+  "preview_test_rows": 74552
+}

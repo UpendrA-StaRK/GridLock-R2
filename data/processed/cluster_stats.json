@@ -1,0 +1,11 @@
+{
+  "eps": 0.03,
+  "min_samples": 50,
+  "n_clusters": 228,
+  "n_noise": 11375,
+  "noise_pct": 4.24,
+  "silhouette_score": NaN,
+  "total_rows": 268281,
+  "zone_id_min": -1,
+  "zone_id_max": 227
+}

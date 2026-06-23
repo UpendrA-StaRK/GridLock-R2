@@ -1,0 +1,28 @@
+{
+  "top_features_by_mean_abs_shap": {
+    "fraction_two_wheeler": 0.3684176054729909,
+    "data_sent_to_scita_mean": 0.1688015807363431,
+    "rolling_7d_count": 0.1428727488345104,
+    "zone_eb_shrunk_mean_count": 0.11154481028937814,
+    "zone_median_count": 0.1100018210683606,
+    "violation_count_lag_1h": 0.056712506766551145,
+    "fraction_heavy_vehicle": 0.04623459753630321,
+    "zone_total_count": 0.03425424841947821,
+    "fraction_at_junction": 0.032400993348530464,
+    "dominant_vehicle_type": 0.030414096406066106
+  },
+  "validation_gate_passed": true,
+  "top5": [
+    "fraction_two_wheeler",
+    "data_sent_to_scita_mean",
+    "rolling_7d_count",
+    "zone_eb_shrunk_mean_count",
+    "zone_median_count"
+  ],
+  "expected_value": 1.2972356744188072,
+  "sample_size": 5000,
+  "outputs": {
+    "summary_plot": "C:\\Users\\USER\\Desktop\\GridLock_R2_Transfer\\data\\outputs\\shap_summary.png",
+    "importance_plot": "C:\\Users\\USER\\Desktop\\GridLock_R2_Transfer\\data\\outputs\\shap_importance.png"
+  }
+}
