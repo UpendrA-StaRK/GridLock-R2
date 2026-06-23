@@ -399,7 +399,8 @@ async function updateDisplay() {
       <td><a href="#" onclick="showZoneTrend(event, ${z.zone_id}, '${z.area_name.replace(/'/g, "\\'")}')" style="color:#3498db; text-decoration:none; font-weight:bold;">${z.zone_id} 🔍</a></td>
       <td style="text-align:left">
         <b>${z.area_name}</b><br>
-        <span style="font-size:11px;color:#7f8c8d">(${z.lat.toFixed(5)}, ${z.lon.toFixed(5)})</span>
+        <span style="font-size:11px;color:#7f8c8d">(${z.lat.toFixed(5)}, ${z.lon.toFixed(5)})</span><br>
+        <span style="font-size:11px;color:#2980b9">🚓 ${z.police_station || 'Unknown'}</span>
       </td>
       <td class="tier-${z.priority_tier}">${z.priority_tier}</td>
       <td>${z.predicted_count.toFixed(1)}</td>
