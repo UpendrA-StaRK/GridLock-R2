@@ -256,9 +256,9 @@ def _build_table_html(top_k_df: pd.DataFrame) -> str:
           <td style='text-align:center'>{int(row['zone_id'])}</td>
           <td style='text-align:left'>
             <b>{area_name_safe}</b><br>
-            <span style='font-size:11px;color:#7f8c8d'>({lat_c:.5f}, {lon_c:.5f})</span><br>
-            <span style='font-size:11px;color:#2980b9'>🚓 {row.get('police_station', 'Unknown')}</span>
+            <span style='font-size:11px;color:#7f8c8d'>({lat_c:.5f}, {lon_c:.5f})</span>
           </td>
+          <td style='text-align:center;font-weight:bold;color:#2980b9'>🚓 {row.get('police_station', 'Unknown')}</td>
           <td style='text-align:center;font-weight:bold;color:{colour}'>{tier}</td>
           <td style='text-align:right'>{row['predicted_count']:.1f}</td>
           <td style='text-align:right'>{row['cis_score']:.4f}</td>
@@ -277,6 +277,7 @@ def _build_table_html(top_k_df: pd.DataFrame) -> str:
             <th style='padding:8px'>Rank</th>
             <th style='padding:8px'>Zone ID</th>
             <th style='padding:8px'>Location</th>
+            <th style='padding:8px'>Police Station</th>
             <th style='padding:8px'>Priority</th>
             <th style='padding:8px'>Predicted Count</th>
             <th style='padding:8px'>CIS Score</th>
