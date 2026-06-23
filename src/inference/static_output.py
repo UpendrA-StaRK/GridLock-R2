@@ -379,14 +379,15 @@ def _build_scorecard_html(
       </div>
       {pai_block}
       <div class='score-block' style='grid-column: 1 / -1; border-left: 4px solid #27ae60; background:#f0faf4;'>
-        <div class='score-label'>Global NDCG@10 — Relevance Ranking</div>
+        <div class='score-label' title='Normalized Discounted Cumulative Gain: Measures if the most critical items appear at the very top of the list.'>Global NDCG@10 — Relevance Ranking ℹ️</div>
         <div class='score-value' style='color:#27ae60;font-size:18px'>
           {ndcg10:.4f}
         </div>
         {_bar(min(ndcg10, 1.0), colour="#27ae60")}
         <div class='score-sub' style='font-size:12px;color:#2c3e50;margin-top:6px'>
           <b style='color:#27ae60'>Perfect Ranking!</b> &nbsp;·&nbsp;
-          Top prioritized zones precisely match the highest real-world violation hotspots.
+          <i>(NDCG measures if the most severe problems are correctly placed at the very top of the priority list).</i><br>
+          Our model's top prioritized zones precisely match the highest real-world violation hotspots.
         </div>
       </div>
     </div>"""
