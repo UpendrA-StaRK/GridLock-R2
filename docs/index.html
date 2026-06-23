@@ -215,10 +215,6 @@
           <div class="score-value" id="kpi-total" style="color:#e74c3c">0</div>
         </div>
         <div class="score-block">
-          <div class="score-label">Active Hotspots (High/Med)</div>
-          <div class="score-value" id="kpi-hotspots">0</div>
-        </div>
-        <div class="score-block">
           <div class="score-label">Total Expected Violations</div>
           <div class="score-value" id="kpi-total-violations">0</div>
         </div>
@@ -458,7 +454,6 @@ async function updateCharts(currentZones) {
       if (res.ok) {
           const json = await res.json();
           document.getElementById('kpi-total').textContent = json.critical_junctions;
-          document.getElementById('kpi-hotspots').textContent = json.hotspots_count;
           document.getElementById('kpi-total-violations').textContent = Math.round(json.total_violations);
       }
   } catch (err) {

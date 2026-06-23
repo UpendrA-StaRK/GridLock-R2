@@ -1,8 +1,8 @@
-# GridLock R2 — PS1: Parking-Induced Congestion
+# GridLock 2.0 | Team Vertex — PS1: Parking-Induced Congestion
 
 > **Problem Statement 1 — Gridlock 2.0 Hackathon**
 >
-> Bengaluru generates tens of thousands of illegal parking violations per day, but enforcement is reactive and patrol-memory-based. **GridLock R2** ingests 150 days of real police violation records, identifies the city's true congestion-driving parking clusters, and produces a ranked enforcement schedule — telling officers *exactly which 10 zones to prioritise at which hour* — so that every patrol car maximises congestion reduction per kilometre driven.
+> Bengaluru generates tens of thousands of illegal parking violations per day, but enforcement is reactive and patrol-memory-based. **GridLock 2.0 | Team Vertex** ingests 150 days of real police violation records, identifies the city's true congestion-driving parking clusters, and produces a ranked enforcement schedule — telling officers *exactly which 10 zones to prioritise at which hour* — so that every patrol car maximises congestion reduction per kilometre driven.
 
 ---
 
