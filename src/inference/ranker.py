@@ -50,6 +50,7 @@ def find_best_checkpoint(
          Guards against a newer-timestamp degraded checkpoint overriding the winner.
       1. primary_model + primary_time_resolution from configs/model.yaml
       2. Most recent checkpoint dir matching model/resolution filters (timestamp sort)
+      3. FALLBACK: submission_checkpoint (used if the user just downloaded the ZIP)
 
     Args:
         project_root:     Project root directory.
@@ -66,11 +67,19 @@ def find_best_checkpoint(
         model_cfg = yaml.safe_load(f)
 
     ckpt_root = project_root / "checkpoints"
-    if not ckpt_root.exists():
-        raise FileNotFoundError(
-            f"Checkpoints directory not found at '{ckpt_root}'. "
-            "Run notebooks/04_training.ipynb first."
-        )
+    has_checkpoints = ckpt_root.exists() and any(ckpt_root.iterdir())
+
+    # If no fresh checkpoints exist, fallback to the bundled ZIP submission checkpoint
+    if not has_checkpoints:
+        submission_ckpt = project_root / "submission_checkpoint"
+        if (submission_ckpt / "training_meta.json").exists():
+            logger.info("No fresh checkpoints found. Using bundled submission_checkpoint for inference.")
+            return submission_ckpt
+        else:
+            raise FileNotFoundError(
+                f"Checkpoints directory not found at '{ckpt_root}' and no bundled submission_checkpoint found. "
+                "Run from scratch first."
+            )
 
     # -- Priority 0: explicit winner_checkpoint pin --------------------------------
     # Set in model.yaml after winning run is identified.

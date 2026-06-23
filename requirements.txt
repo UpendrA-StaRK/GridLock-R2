@@ -1,9 +1,7 @@
 pandas
 numpy
 scikit-learn
-xgboost
 lightgbm
-catboost
 folium
 tqdm
 loguru
@@ -13,6 +11,7 @@ pyarrow
 matplotlib
 scipy
 seaborn
+fastapi
+uvicorn
+python-multipart
 shap
-notebook
-ipywidgets

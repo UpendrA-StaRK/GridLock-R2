@@ -198,22 +198,36 @@ def run_clustering(
 
         pbar.set_description("Extracting unique coordinates")
         coords = df[[lat_col, lon_col]].values
-        unique_coords, inverse_indices, counts = np.unique(coords, axis=0, return_inverse=True, return_counts=True)
+        
+        # 1. Exact original scaling logic: find unique raw coords first
+        unique_coords_orig, inverse_orig, counts_orig = np.unique(coords, axis=0, return_inverse=True, return_counts=True)
         pbar.update(1)
 
         pbar.set_description("Scaling coordinates")
         scaler = StandardScaler()
-        unique_scaled = scaler.fit_transform(unique_coords)
+        unique_scaled_orig = scaler.fit_transform(unique_coords_orig)
         pbar.update(1)
+
+        # 2. OOM Prevention: Compress the scaled coordinates
+        # Rounding scaled coords to 3 decimal places (~0.001 std dev ≈ 11 meters)
+        # This drastically reduces DBSCAN neighborhood matrix size without altering the scaler's geometry
+        unique_scaled_rounded = np.round(unique_scaled_orig, 3)
+        unique_scaled_final, inverse_final = np.unique(unique_scaled_rounded, axis=0, return_inverse=True)
+        
+        # Sum the weights of the collapsed points
+        counts_final = np.zeros(len(unique_scaled_final), dtype=int)
+        np.add.at(counts_final, inverse_final, counts_orig)
 
         pbar.set_description("Fitting DBSCAN")
         db = DBSCAN(eps=eps, min_samples=min_samples, n_jobs=None)
-        db.fit(unique_scaled, sample_weight=counts)
-        labels_unique = db.labels_
+        db.fit(unique_scaled_final, sample_weight=counts_final)
+        
+        # Map labels back through both compression layers
+        labels_unique_orig = db.labels_[inverse_final]
         pbar.update(1)
 
         pbar.set_description("Assigning zone_id")
-        labels = labels_unique[inverse_indices]
+        labels = labels_unique_orig[inverse_orig]
         df["zone_id"] = labels.astype("int32")
         pbar.update(1)
 

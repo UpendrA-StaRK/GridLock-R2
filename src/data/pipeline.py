@@ -247,24 +247,13 @@ def step8_infer(
     # Generate 24-hour interactive slider map (Demo Dashboard)
     from src.inference.static_output import generate_static_output_with_slider
     
-    import pandas as pd
-    t_date = pd.Timestamp(target_date)
-    # Generate a week of dates starting from target_date
-    week_dates = [(t_date + pd.Timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)]
-    
-    all_dates_hours_data = {}
-    logger.info(f"Generating predictions for interactive dashboard (7 days: {week_dates[0]} to {week_dates[-1]})...")
-    
-    for d_str in week_dates:
-        all_dates_hours_data[d_str] = {}
-        for h in tqdm(range(24), desc=f"Ranking {d_str}", unit="hour", leave=False):
-            all_dates_hours_data[d_str][h] = rank_zones(ranker, target_date=d_str, target_hour=h, top_k=top_k)
+    logger.info("Updating frontend dashboard scorecard with latest model metrics...")
     
     slider_html_path = project_root / "docs" / "index.html"
     generate_static_output_with_slider(
-        all_dates_hours_data=all_dates_hours_data,
+        all_dates_hours_data={},
         centroids_df=centroids_df,
-        target_dates=week_dates,
+        target_dates=[],
         output_path=slider_html_path,
         model_name=ranker["model_name"],
         time_resolution=ranker["time_resolution"],

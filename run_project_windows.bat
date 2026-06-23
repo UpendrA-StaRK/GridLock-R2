@@ -1,7 +1,6 @@
 @echo off
-cd /d "%~dp0.."
 echo ========================================================
-echo GridLock R2 - Fresh System Setup ^& Execution
+echo GridLock R2 - Full Pipeline (Train from Scratch)
 echo ========================================================
 echo.
 
@@ -35,7 +34,23 @@ if %errorlevel% neq 0 (
 )
 
 echo.
+echo [4/4] Generating SHAP Feature Importance Analysis...
+python src/evaluation/shap_analysis.py
+
+if %errorlevel% neq 0 (
+    echo.
+    echo [WARNING] SHAP analysis failed. Dashboard will show empty feature importance chart.
+)
+
+echo.
 echo ========================================================
 echo [SUCCESS] Pipeline completed successfully.
 echo ========================================================
+echo.
+echo [5/5] Starting servers for demo...
+start /min "GridLock R2 API" cmd /c "call venv\Scripts\activate && uvicorn src.api.main:app --host 127.0.0.1 --port 9000"
+start /min "GridLock R2 Dashboard" cmd /c "python -m http.server 9090 --directory docs"
+echo Launching dashboard in browser...
+timeout /t 2 >nul
+start http://localhost:9090
 pause

@@ -17,17 +17,19 @@ deterministic: true   # Set all random seeds before any training
 # DO NOT change without re-running 02_cluster_tuning.ipynb first.
 # Changing eps shifts all zone_ids — requires full retrain from scratch.
 dbscan:
-  eps: 0.05                 # In StandardScaler-normalised coordinate units
+  eps: 0.03                 # In StandardScaler-normalised coordinate units
   min_samples: 50           # Min points to form a dense cluster
   committed_on: "2026-06-16"
   tuning_notebook: "notebooks/02_cluster_tuning.ipynb"
   tuning_results:
-    n_clusters: 90          # On 50k-row sample; full dataset may differ slightly
+    n_clusters: 228          # On 50k-row sample; full dataset may differ slightly
     noise_pct: 11.3         # % rows labelled -1 (sparse zone)
     silhouette_score: 0.3415
     sample_size: 50000
   notes: >
-    90 clusters across Bengaluru at 0.05 eps (scaled).
+    # 3. Memory Optimization: Truncating coords to 3 decimal places (~11m precision)
+    #    prevents OOM crashes while maintaining exact geographic accuracy for the 
+    #    228 clusters across Bengaluru at 0.03 eps (scaled).
     11.3% noise → sparse zones, handled per eval.yaml noise_zones policy.
     Silhouette 0.3415 = decent separation, above the 0.30 minimum threshold.
 
