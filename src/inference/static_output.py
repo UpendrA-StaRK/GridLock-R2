@@ -190,14 +190,6 @@ def build_folium_map(
             </div>
         """
         
-        eco_loss = row.get("economic_loss_inr", 0)
-        if eco_loss > 0:
-            popup_html += f"""
-            <div style="margin-bottom:10px; font-size:12px;">
-              <span style="color:#7f8c8d">Est. Economic Loss:</span> <b>₹{eco_loss:,.0f}</b>
-            </div>
-            """
-            
         nlp_exp = row.get("nlp_explanation", "")
         disp_strat = row.get("dispatch_strategy", "")
         if nlp_exp and disp_strat:
@@ -267,7 +259,6 @@ def _build_table_html(top_k_df: pd.DataFrame) -> str:
           </td>
           <td style='text-align:center;font-weight:bold;color:{colour}'>{tier}</td>
           <td style='text-align:right'>{row['predicted_count']:.1f}</td>
-          <td style='text-align:right'>₹{row.get('economic_loss_inr', 0):,.0f}</td>
           <td style='text-align:right'>{row['cis_score']:.4f}</td>
           <td style='text-align:center'>{'✓' if row.get('has_junction') else '—'}</td>
           <td style='text-align:left;font-size:12px;'>
@@ -286,7 +277,6 @@ def _build_table_html(top_k_df: pd.DataFrame) -> str:
             <th style='padding:8px'>Location</th>
             <th style='padding:8px'>Priority</th>
             <th style='padding:8px'>Predicted Count</th>
-            <th style='padding:8px'>Economic Loss</th>
             <th style='padding:8px'>CIS Score</th>
             <th style='padding:8px'>Junction</th>
             <th style='padding:8px'>Copilot & Dispatch Strategy</th>
@@ -700,7 +690,6 @@ def generate_static_output_with_slider(
                     "priority_tier":  str(row.get("priority_tier", "LOW")),
                     "has_junction":   bool(row.get("has_junction", False)),
                     "dominant_violation_type": str(row.get("dominant_violation_type", "UNKNOWN")),
-                    "economic_loss_inr": float(row.get("economic_loss_inr", 0)),
                     "nlp_explanation": str(row.get("nlp_explanation", "")),
                     "dispatch_strategy": str(row.get("dispatch_strategy", "")),
                     "area_name":      str(centroid.get("area_name", "Unknown Area")),
@@ -868,7 +857,6 @@ def generate_static_output_with_slider(
           <tr>
             <th>Rank</th><th>Zone ID</th><th>Location</th><th>Priority</th>
             <th>Predicted<br>Count</th>
-            <th>Economic<br>Loss</th>
             <th>CIS Score</th>
             <th>Junction</th>
             <th>Copilot & Dispatch Strategy</th>
@@ -893,8 +881,8 @@ def generate_static_output_with_slider(
           <div class="score-value" id="kpi-hotspots">0</div>
         </div>
         <div class="score-block">
-          <div class="score-label">Avg CIS Score</div>
-          <div class="score-value" id="kpi-avg-cis">0.00</div>
+          <div class="score-label">Total Expected Violations</div>
+          <div class="score-value" id="kpi-total-violations">0</div>
         </div>
       </div>
     </div>
@@ -995,13 +983,6 @@ function updateDisplay() {{
             <div style="font-size:11px; font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${{z.dominant_violation_type}}">${{z.dominant_violation_type}}</div>
           </div>
         </div>`;
-
-    if (z.economic_loss_inr > 0) {{
-        popupHtml += `<div style="margin-bottom:10px; font-size:12px;">
-          <span style="color:#7f8c8d">Est. Economic Loss:</span> <b>₹${{z.economic_loss_inr.toLocaleString(undefined, {{maximumFractionDigits: 0}})}}</b>
-        </div>`;
-    }}
-
     if (z.nlp_explanation && z.dispatch_strategy) {{
         popupHtml += `<details style="background:#fff8e1; border:1px solid #ffe082; border-radius:6px; outline:none;">
           <summary style="padding:8px; font-size:12px; font-weight:600; color:#b7950b; cursor:pointer; user-select:none; outline:none;">
@@ -1045,7 +1026,6 @@ function updateDisplay() {{
       </td>
       <td class="tier-${{z.priority_tier}}">${{z.priority_tier}}</td>
       <td>${{z.predicted_count.toFixed(1)}}</td>
-      <td>₹${{z.economic_loss_inr.toLocaleString(undefined, {{maximumFractionDigits: 0}})}}</td>
       <td>${{z.cis_score.toFixed(4)}}</td>
       <td>${{z.has_junction ? '✓' : '—'}}</td>
       <td style="text-align:left;font-size:12px;line-height:1.2;">
@@ -1101,13 +1081,11 @@ function updateCharts(currentZones) {{
   // High/Med hotspots
   const hotspots = currentZones.filter(z => z.priority_tier === 'HIGH' || z.priority_tier === 'MEDIUM');
   
-  const avgCis = hotspots.length > 0 
-    ? hotspots.reduce((sum, z) => sum + z.cis_score, 0) / hotspots.length 
-    : 0;
+  const totalViolations = currentZones.reduce((sum, z) => sum + z.predicted_count, 0);
 
   document.getElementById('kpi-total').textContent = criticalJunctions;
   document.getElementById('kpi-hotspots').textContent = hotspots.length;
-  document.getElementById('kpi-avg-cis').textContent = avgCis.toFixed(2);
+  document.getElementById('kpi-total-violations').textContent = Math.round(totalViolations);
   document.getElementById('kpi-hour-label').textContent = `Hour ${{String(currentHour).padStart(2, '0')}}:00`;
 
   // 3. Bar Chart: Dominant types in Top Zones

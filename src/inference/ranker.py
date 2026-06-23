@@ -477,7 +477,6 @@ def rank_zones(
         # Pull necessary scaffold columns for advanced inference
         top_k_scaffold = scaffold_df[scaffold_df["zone_id"].isin(top_k_df["zone_id"])].set_index("zone_id")
         
-        economic_losses = []
         nlp_explanations = []
         dispatch_strategies = []
         
@@ -493,14 +492,7 @@ def rank_zones(
             frac_car = max(0.0, 1.0 - frac_2w - frac_hv)
             peak_ratio = top_k_scaffold.at[zid, "zone_peak_hour_ratio"] if "zone_peak_hour_ratio" in top_k_scaffold.columns else 0.2
             
-            # 1. Economic Loss Quantification
-            # PCU: HV=2.5, Car=1.0, 2W=0.5
-            # Blockage: HV=45m (0.75h), Car=20m (0.33h), 2W=10m (0.16h)
-            pcu_blockage_hours = (frac_hv * 2.5 * 0.75) + (frac_car * 1.0 * 0.33) + (frac_2w * 0.5 * 0.16)
-            loss_inr = count * pcu_blockage_hours * 85.0
-            economic_losses.append(loss_inr)
-            
-            # 2. GridLock Copilot (NLP Explanations)
+            # 1. GridLock Copilot (NLP Explanations)
             reasons = []
             if has_junc:
                 reasons.append("High risk of cascading junction congestion.")
@@ -530,7 +522,6 @@ def rank_zones(
                 strat = "Low priority - monitor only."
             dispatch_strategies.append(strat)
             
-        top_k_df["economic_loss_inr"] = np.array(economic_losses).round(0)
         top_k_df["nlp_explanation"] = nlp_explanations
         top_k_df["dispatch_strategy"] = dispatch_strategies
 
